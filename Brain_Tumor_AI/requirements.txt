@@ -1,0 +1,8 @@
+pip install torch torchvision
+pip install grad-cam
+pip install shap
+pip install captum
+pip install opencv-python
+pip install matplotlib
+pip install pillow
+pip install numpy
