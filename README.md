@@ -13,14 +13,14 @@ Dept. of CSE, 2025–2026.
 ## Team & Contributions
 
 | Contributor | Component | What they built |
-|---|---|---|
+|-------------|-----------|-----------------|
 | **Yashwanth E S** | [`Brain_Tumor_AI/`](./Brain_Tumor_AI) | The CNN (DenseNet121-based) trained on BraTS 2021 FLAIR MRI scans, plus the Grad-CAM, SHAP, and Integrated Gradients explainability pipeline (`predict.py`, `utils/`). |
 | **Ankith V Hullamani** | [`backend/`](./backend) & [`frontend/`](./frontend) | Django REST API wrapping the model, scan-history persistence, and the React/Tailwind dashboard (upload → prediction → XAI visualizations → PDF report). |
-| Aaryan Kumar, Tejaswini K | Research & documentation | Literature survey, comparative analysis, and project report. |
-| Dr. Kamalakshi Naganna | Guide | Professor & Head, Dept. of CSE — project supervision. |
+| **Aaryan Kumar** | [`frontend/`](./frontend) | React/Tailwind UI redesign, reusable frontend components, improved report interface, responsive layouts, and enhanced user experience. |
+| **Tejaswini K** | Research & documentation | Literature survey, comparative analysis, and project report. |
+| **Dr. Kamalakshi Naganna** | Guide | Professor & Head, Dept. of CSE — project supervision. |
 
-`Brain_Tumor_AI/` is treated as a contribution boundary: the backend imports and calls
-that code but never modifies it (see [Architecture](#architecture) below).
+`Brain_Tumor_AI/` is treated as a contribution boundary: the backend imports and calls that code but never modifies it (see [Architecture](#architecture) below).
 
 ---
 
