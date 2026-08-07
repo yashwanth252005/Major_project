@@ -48,63 +48,26 @@ html{
   scroll-behavior:smooth;
 }
 
-body {
-  @apply text-slate-100;
+body{
 
-  margin: 0;
-  min-height: 100vh;
-  color: var(--text);
+  margin:0;
 
-  /* Professional Medical Background */
+  min-height:100vh;
+
+  color:var(--text);
+
   background:
-    radial-gradient(circle at 0% 0%,
-      rgba(91,124,255,.18) 0%,
-      transparent 32%),
-
-    radial-gradient(circle at 100% 100%,
-      rgba(91,124,255,.12) 0%,
-      transparent 28%),
-
-    radial-gradient(circle at 50% 20%,
-      rgba(99,102,241,.08) 0%,
-      transparent 45%),
-
-    linear-gradient(
-      180deg,
-      #070C16 0%,
-      #0B1322 35%,
-      #101827 100%
-    );
-
-  background-attachment: fixed;
+      radial-gradient(circle at top left,#1c2d63 0%,transparent 40%),
+      radial-gradient(circle at bottom right,#11214a 0%,transparent 35%),
+      var(--bg);
 
   font-family:
-    Inter,
-    ui-sans-serif,
-    system-ui,
-    sans-serif;
+      Inter,
+      ui-sans-serif,
+      system-ui,
+      sans-serif;
 
-  -webkit-font-smoothing: antialiased;
-
-  overflow-x: hidden;
-}
-body::before {
-  content: "";
-
-  position: fixed;
-  inset: 0;
-
-  pointer-events: none;
-
-  opacity: .04;
-
-  background-image:
-    linear-gradient(rgba(255,255,255,.08) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(255,255,255,.08) 1px, transparent 1px);
-
-  background-size: 60px 60px;
-
-  mask-image: radial-gradient(circle, black 35%, transparent 100%);
+  -webkit-font-smoothing:antialiased;
 }
 
 ::selection{
@@ -161,17 +124,15 @@ img{
 
 .surface{
 
-  background: rgba(18, 27, 43, 0.78);
+  background:rgba(19,27,43,.88);
 
   backdrop-filter:blur(16px);
 
-  border:1px solid rgba(255,255,255,.08);
+  border:1px solid rgba(255,255,255,.06);
 
   border-radius:var(--radius-xl);
 
-  box-shadow:
-    0 10px 35px rgba(0,0,0,.35),
-    inset 0 1px 0 rgba(255,255,255,.03);
+  box-shadow:var(--shadow-card);
 }
 
 .surface-hover{
@@ -181,17 +142,13 @@ img{
   transition:all .25s ease;
 }
 
-.btn-primary:hover{
+.surface-hover:hover{
 
-  transform:translateY(-3px);
+  transform:translateY(-4px);
 
-  filter:brightness(1.05);
+  background:rgba(26,35,53,.96);
 
-  box-shadow:
-      0 20px 40px rgba(91,124,255,.45);
-}
-.btn-primary:active{
-    transform:scale(.98);
+  box-shadow:var(--shadow-lg);
 }
 
 /* ===========================
@@ -298,25 +255,14 @@ img{
 }
 
 .badge{
-    display:inline-flex;
-    align-items:center;
-    gap:6px;
-
-    padding:6px 12px;
-
-    border-radius:999px;
-
-    font-size:.72rem;
-
-    font-weight:600;
-
-    letter-spacing:.04em;
-
-    background:rgba(91,124,255,.12);
-
-    border:1px solid rgba(91,124,255,.18);
-
-    color:#BFD0FF;
+  display:inline-flex;
+  align-items:center;
+  padding:.28rem .65rem;
+  border-radius:999px;
+  font-size:.68rem;
+  font-weight:600;
+  background:rgba(91,124,255,.12);
+  color:#b8c7ff;
 }
 
 .glass{

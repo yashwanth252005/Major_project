@@ -190,9 +190,6 @@ img{
   box-shadow:
       0 20px 40px rgba(91,124,255,.45);
 }
-.btn-primary:active{
-    transform:scale(.98);
-}
 
 /* ===========================
    BUTTONS
@@ -298,25 +295,14 @@ img{
 }
 
 .badge{
-    display:inline-flex;
-    align-items:center;
-    gap:6px;
-
-    padding:6px 12px;
-
-    border-radius:999px;
-
-    font-size:.72rem;
-
-    font-weight:600;
-
-    letter-spacing:.04em;
-
-    background:rgba(91,124,255,.12);
-
-    border:1px solid rgba(91,124,255,.18);
-
-    color:#BFD0FF;
+  display:inline-flex;
+  align-items:center;
+  padding:.28rem .65rem;
+  border-radius:999px;
+  font-size:.68rem;
+  font-weight:600;
+  background:rgba(91,124,255,.12);
+  color:#b8c7ff;
 }
 
 .glass{
