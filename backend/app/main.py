@@ -61,13 +61,19 @@ def _load_background(n=16):
     if not os.path.isdir(DEMO_DATA_DIR):
         return None
     paths = []
-    for cls in ("tumor", "notumor"):
+    # accept both the synthetic layout (tumor/notumor, from train_demo.py)
+    # and the Kaggle brain-tumor dataset layout (yes/no) shipped in demo_data
+    for cls in ("tumor", "yes", "notumor", "no"):
         cls_dir = os.path.join(DEMO_DATA_DIR, cls)
         if os.path.isdir(cls_dir):
             paths += [os.path.join(cls_dir, f) for f in os.listdir(cls_dir)[: n // 2]]
     tensors = []
     for p in paths[:n]:
-        img = cv2.imread(p, cv2.IMREAD_GRAYSCALE).astype(np.float32) / 255.0
+        img = cv2.imread(p, cv2.IMREAD_GRAYSCALE)
+        if img is None:
+            continue
+        # demo images vary in size; match the /predict preprocessing (128x128)
+        img = cv2.resize(img, (IMG_SIZE, IMG_SIZE)).astype(np.float32) / 255.0
         img = (img - 0.5) / 0.5
         tensors.append(torch.from_numpy(img).unsqueeze(0))
     if not tensors:
