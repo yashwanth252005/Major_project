@@ -207,7 +207,7 @@ train_real.py). It is used only as SHAP background sampling at inference time.
 
 | Phase | Planner | Implementor | Reviewer | Gate | Reviewed Commit |
 |---|---|---|---|---|---|
-| 0 | NOT STARTED | NOT STARTED | NOT STARTED | BLOCKED | — |
+| 0 | COMPLETE | COMPLETE | COMPLETE | APPROVED WITH NON-BLOCKING NOTES | 628cd7c (files committed after) |
 | 1 | NOT STARTED | NOT STARTED | NOT STARTED | BLOCKED | — |
 | 2 | NOT STARTED | NOT STARTED | NOT STARTED | BLOCKED | — |
 | 3A Evaluation Framework | NOT STARTED | NOT STARTED | NOT STARTED | BLOCKED | — |
@@ -278,18 +278,149 @@ Never store sensitive patient information in this ledger.
 # Phase 0 — Baseline & Regression Safety
 
 ## Planner Record
-_Not started._
+
+### Planner Record — Phase 0
+
+**Session ID:** PHASE-0-PLANNER (orchestrator-dispatched independent subagent)
+**Date:** 2026-09-25
+**Starting commit:** 628cd7c (post-bootstrap: 18a80d1 docs + 628cd7c pre-existing SHAP-background fix)
+**Branch:** main
+**Model SHA-256:** 5f191bc80ec9d558bccbbbf10824e1a020c1450d3a037d68a75d12b475ab7bc1 (verified unchanged)
+
+#### Repository state inspected
+- Clean tree at 628cd7c; no tests anywhere; pytest not installed in backend/venv (Python 3.10.11, torch 2.13.0+cpu, fastapi 0.141.1, starlette 1.6.0, httpx2 2.13.1 present so TestClient works).
+- Planner re-verified by EXECUTION: /health 200 shape; /predict missing file → 422 (FastAPI semantics, adapted from handoff's Django-400 expectation); corrupt bytes → 400 "Could not read image"; 503 branch driven by module global `model_loaded` (monkeypatchable); `_preprocess` deterministic (1,1,128,128) float32 in [-1,1]; `_load_background()` → (16,1,128,128) float32 in [-1,1], cached by identity.
+
+#### Planned files to change (all new, additive only)
+- backend/pytest.ini, backend/requirements-dev.txt, backend/tests/{conftest.py, test_health.py, test_predict_validation.py, test_predict_success.py, test_preprocess.py, test_integration_real_inference.py}
+
+#### Files explicitly frozen
+- backend/app/* (no production edits permitted), backend/model_weights.pt, backend/requirements.txt, backend/train_*.py, backend/prepare_brats.py, entire frontend/, root docs.
+
+#### Test plan (summary)
+- Health 200 exact key set; predict 422 (missing file) / 400 (corrupt, garbage-with-valid-extension) / 503 (patched model_loaded=False); mocked-XAI happy path asserting exact 7-key response, base64 PNG magic, label/confidence↔raw_probability consistency; shap-null path when DEMO_DATA_DIR missing; preprocessing determinism + independent normalization recomputation; background tensor shape/range/cache; one `@pytest.mark.slow` real-model end-to-end test. XAI mocked in `app.main` namespace; real model forward kept.
+- Canonical commands: `cd backend && venv/Scripts/python.exe -m pytest`; root: `backend/venv/Scripts/python.exe -m pytest backend/tests -c backend/pytest.ini`; fast: `-m "not slow"`.
+
+#### Risks
+- pytest install needs network once; first collection ~15-40s (torch import); os.chdir in conftest is test-process-global; fixture depends on committed demo_data.
+
+#### Rollback
+- Delete new test files; purely additive, zero production impact.
+
+#### Acceptance criteria
+1. pytest green twice including slow test; 2. `git status` shows only the 8 new files, no modified existing files; 3. model SHA-256 unchanged; 4. API behavior identical to baseline; 5. no frontend changes.
+
+#### Planner decision
+READY FOR IMPLEMENTATION
 
 ## Implementor Record
-_Not started._
+
+### Implementor Record — Phase 0
+
+**Session ID:** PHASE-0-IMPLEMENTOR (orchestrator-dispatched independent subagent)
+**Starting commit:** 628cd7c
+**Ending commit:** (phase files left uncommitted for review; committed by orchestrator after APPROVED)
+**Branch:** main
+
+#### Planner record followed
+- yes, exactly; no deviations.
+
+#### Files changed (all new)
+- backend/pytest.ini, backend/requirements-dev.txt, backend/tests/{conftest.py, test_health.py, test_predict_validation.py, test_predict_success.py, test_preprocess.py, test_integration_real_inference.py}
+
+#### Functional changes
+- None (purely additive test suite; production behavior untouched).
+
+#### Tests added
+- 13 tests: health 1, predict validation 4 (422 missing-file, 400 corrupt, 400 garbage-with-valid-extension, 503 not-loaded), mocked-XAI happy path 3 (exact 7-key shape + PNG magic, label/confidence↔raw_probability consistency, shap-null fallback), preprocess/background 4, real-inference integration 1 (`slow`, no mocks).
+
+#### Commands executed
+```text
+backend/venv/Scripts/python.exe -m pip install -r backend/requirements-dev.txt
+cd backend && ./venv/Scripts/python.exe -m pytest   (run twice)
+```
+(pytest 8.4.2 installed; httpx2 2.13.1 already present.)
+
+#### Test results
+```text
+Run 1: 13 passed in 3.28s
+Run 2: 13 passed in 2.75s   (stability confirmed)
+```
+
+#### Frontend build result
+```text
+Not rebuilt (no frontend changes; baseline build captured at bootstrap: vite 8, OK)
+```
+
+#### Migration result
+```text
+N/A — no database in this architecture
+```
+
+#### Model SHA-256 after implementation
+- 5f191bc80ec9d558bccbbbf10824e1a020c1450d3a037d68a75d12b475ab7bc1 (untouched; never written)
+
+#### Deviations from plan
+- none
+
+#### Unresolved items
+- none
+
+#### Implementor status
+READY FOR REVIEW
 
 ## Independent Reviewer Record
-_Not started._
+
+### Independent Reviewer Record — Phase 0
+
+**Session ID:** PHASE-0-REVIEWER (orchestrator-dispatched independent subagent; did not trust implementor report)
+**Reviewed commit:** 628cd7c (working tree, uncommitted phase files)
+**Expected baseline commit:** 628cd7c
+
+#### Diff independently inspected
+- `git status --porcelain -uall`: exactly 8 new files + orchestrator's ledger edit; `git diff` of all production paths empty; nothing staged; HEAD unchanged at 628cd7c.
+
+#### Architecture integrity
+- PASS — zero production/frontend edits; no conftest outside backend/tests/; no import hooks; pytest.ini pytest-only.
+
+#### API compatibility
+- PASS — production diff empty; runtime behavior provably identical.
+
+#### Database/migration safety
+- PASS/N-A — no database layer exists.
+
+#### Model integrity
+- PASS — baseline 5f191bc8…b7bc1 == current 5f191bc8…b7bc1 (reviewer recomputed).
+
+#### Automated tests rerun
+```text
+Run 1: 13 passed in 3.09s (includes slow, 0 skipped/deselected; -v cross-checked)
+Run 2: 13 passed in 3.27s
+```
+
+#### Frontend build rerun
+- Not rebuilt (untouched; verified via git status).
+
+#### Manual regression performed
+- Line-by-line audit of all 6 test modules against app/main.py: assertions confirmed substantive (exact key sets, FastAPI 422 detail structure, real model forward retained with only the three XAI functions patched in app.main namespace, normalization recomputed independently, cache identity, PNG magic on all image fields). No vacuous tests found.
+
+#### Blocking findings
+- none
+
+#### Non-blocking findings
+- Label-consistency test uses 6-dp-rounded raw_probability (theoretical 5e-7 boundary, zero practical flake risk); conftest os.chdir is process-global for tests only; untracked pytest caches verified gitignored; slow test doesn't re-assert label consistency (covered by mocked test).
+
+#### Decision
+APPROVED WITH NON-BLOCKING NOTES
+
+#### Required next action
+- Orchestrator commits the 8 phase files as the phase-0 commit; proceed to Phase 1.
 
 ## Gate Decision
 
-**Decision:** BLOCKED  
-**Phase 1 may start:** NO
+**Decision:** APPROVED (with non-blocking notes)
+**Phase 1 may start:** YES
+**Committed as:** phase-0 commit (see Git history)
 
 ---
 
