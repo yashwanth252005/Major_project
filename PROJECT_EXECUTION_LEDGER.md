@@ -212,7 +212,7 @@ train_real.py). It is used only as SHAP background sampling at inference time.
 | 2 | COMPLETE | COMPLETE | COMPLETE | APPROVED | 1f72ab7 (files committed after) |
 | 3A Evaluation Framework | COMPLETE | COMPLETE | COMPLETE | APPROVED | dbf4aea (files committed after) |
 | 3B Evaluation Results | COMPLETE | COMPLETE (EVAL-001) | COMPLETE | APPROVED WITH NON-BLOCKING NOTES | 58de4ed (docs committed after) |
-| 4 | NOT STARTED | NOT STARTED | NOT STARTED | BLOCKED | — |
+| 4 | COMPLETE | COMPLETE (+fix-loop) | COMPLETE | APPROVED WITH NON-BLOCKING NOTES | adbc019 (files committed after) |
 | 5 | NOT STARTED | NOT STARTED | NOT STARTED | BLOCKED | — |
 | 6 | NOT STARTED | NOT STARTED | NOT STARTED | BLOCKED | — |
 | 7 | NOT STARTED | NOT STARTED | NOT STARTED | BLOCKED | — |
@@ -1150,18 +1150,158 @@ No model-performance figures may be represented as final while this gate is pend
 # Phase 4 — Scan Metadata, Report & PDF
 
 ## Planner Record
-_Not started._
+
+### Planner Record — Phase 4
+
+**Session ID:** PHASE-4-PLANNER (orchestrator-dispatched independent subagent)
+**Date:** 2026-09-25
+**Starting commit:** adbc019 (phase-3b commit)
+**Branch:** main
+**Model SHA-256:** 5f191bc80ec9d558bccbbbf10824e1a020c1450d3a037d68a75d12b475ab7bc1 (re-verified)
+
+#### Adaptation note (per CORRECTION C-001)
+Handoff Feature C assumes an existing history/scan-detail page and SQLite Scan records. This
+repo has none, so Phase 4 BUILDS the substrate additively: SQLite persistence + history API +
+scan-detail report page + multipage client-side PDF export on the frozen FastAPI/React stack.
+
+#### Binding architecture decisions
+- D1 stdlib sqlite3, connection-per-op + write lock; SCAN_DB_PATH global read at CALL time
+  (tests monkeypatch app.db.SCAN_DB_PATH); schema lazily created; incompatible existing schema
+  → RuntimeError surfaced as clean 500 "History storage error."
+- D2 source dimensions via new image_dimensions() helper in preprocessing.py (preprocess_bytes
+  untouched); D3 cached model_fingerprint(path) in new app/model_info.py; D4 processing_time_ms
+  = perf_counter around lock section; DB insert moved OUTSIDE the inference lock.
+- D5 /predict: original 7 fields byte-identical + additive fields on successful persistence;
+  DB FAILURE → exact original 7-field payload with 200 (inference primary, history additive).
+- D8 react-router-dom v7 with HashRouter (built dist works on any static server); D9 deps
+  exactly react-router-dom, html2canvas@^1.4.1, jspdf@^2.5.2 (sanctioned by handoff Feature C);
+  D11 PDF captures the dark theme as-rendered; D10 CSS appended to App.css only.
+- GET /history = lightweight array newest-first WITHOUT image payloads/fingerprint;
+  GET /history/{id} = full record; DELETE → 204. Field lists locked in the plan.
+
+#### Files to change
+- NEW backend: app/db.py, app/model_info.py, tests/{test_db, test_history_api, test_predict_persistence}.py
+- MODIFIED backend: app/main.py (additive persistence + timing + docstring), app/preprocessing.py (image_dimensions only), tests/conftest.py (autouse isolated_scan_db fixture), 3 exact-key assertions → superset (test_predict_success.py:33, test_predict_upload_validation.py:98, test_integration_real_inference.py:26)
+- NEW frontend: src/api.js, src/xaiMethods.js, src/pages/{Home,HistoryList,ScanDetail}.jsx, src/exportPdf.js
+- MODIFIED frontend: App.jsx (shell + HashRouter + nav), App.css (Phase 4 section), package.json (+3 deps)
+- ROOT: .gitignore (+neuroscan.db)
+- Expected test total: 53. Frozen: model.py, xai.py, config.py, evaluation/, train_*, checkpoint, main.jsx, vite.config.js, requirements*.
+
+#### Risks
+- SCAN_DB_PATH must never be bound by value outside db.py; _schema_ready reset in fixture;
+  JSONResponse restructure must keep all inference inside the lock; jspdf pinned major 2;
+  html2canvas-safe CSS verified (no oklch/lab); react-router v7 import surface.
+
+#### Planner decision
+READY FOR IMPLEMENTATION
 
 ## Implementor Record
-_Not started._
+
+### Implementor Record — Phase 4
+
+**Session ID:** PHASE-4-IMPLEMENTOR (orchestrator-dispatched independent subagent) + orchestrator fix-loop after review
+**Starting commit:** adbc019
+**Branch:** main
+
+#### Planner record followed
+- yes; deviations: fetchJson returns null on 204 (DELETE flow); ApiReadout extracted for StatusDot reflectivity; extra CSS helper classes in the Phase 4 block; formatBytes duplicated in two pages (no shared util planned); placeholder text generalized.
+
+#### Files changed
+- NEW backend: app/db.py, app/model_info.py, tests/{test_db,test_history_api,test_predict_persistence}.py (16 tests).
+- MODIFIED backend: app/main.py (persistence + /history endpoints + docstring), app/preprocessing.py (image_dimensions only), tests/conftest.py (autouse isolated_scan_db), 3 exact-key→superset test edits.
+- NEW frontend: src/{api.js,xaiMethods.js,exportPdf.js}, src/pages/{Home,HistoryList,ScanDetail}.jsx.
+- MODIFIED frontend: App.jsx (HashRouter shell + nav + ApiReadout), App.css (appended Phase 4 section), package.json/lock (+react-router-dom 7.18.4, html2canvas 1.4.1, jspdf 2.5.2).
+- ROOT: .gitignore (+neuroscan.db).
+
+#### Reviewer fix-loop applied (orchestrator)
+- All three /history handlers now wrap db calls in try/except → 500 detail "History storage error." (contract item previously unmet) + 3 new sanitized-500 tests.
+- App shell StatusDot made reflectivity-real: ApiReadout probes GET /health on mount and on every route change (AbortController).
+
+#### Tests added
+- 19 total (16 from implementor + 3 from fix-loop). Suite: 56 passed.
+
+#### Commands executed
+```text
+cd backend && ./venv/Scripts/python.exe -m pytest        (multiple green runs; final 56 passed)
+cd frontend && npm install react-router-dom html2canvas@^1.4.1 jspdf@^2.5.2
+cd frontend && npm run build && npm run lint
+Live browser verification: uvicorn :8000 + vite :5173, 3 rows seeded via /predict
+```
+
+#### Test results
+```text
+56 passed in 4.83s; vite build OK (jspdf/html2canvas code-split); oxlint 0 warnings 0 errors
+```
+
+#### Live browser verification (orchestrator, IAB)
+- Home: baseline layout intact + new nav + green API dot. History: table newest-first, color-coded predictions, source dims correct, delete buttons. Scan detail (#/history/:id): full Feature-C metadata (id, timestamp, filename, MIME, source dims, size, model, fingerprint truncated+toggle, classes with detected highlighted, prediction incl. processing time), all 4 images incl. SHAP, methods + non-clinical disclaimer. Download PDF clicked → download event fired (jsPDF executed, no JS errors).
+
+#### Model SHA-256 after implementation
+- 5f191bc80ec9d558bccbbbf10824e1a020c1450d3a037d68a75d12b475ab7bc1 (unchanged)
+
+#### Deviations from plan
+- Listed above; none touch frozen files.
+
+#### Unresolved items
+- none
+
+#### Implementor status
+READY FOR REVIEW → reviewed; fix-loop applied → READY TO COMMIT
 
 ## Independent Reviewer Record
-_Not started._
+
+### Independent Reviewer Record — Phase 4
+
+**Session ID:** PHASE-4-REVIEWER (orchestrator-dispatched independent subagent)
+**Reviewed commit:** adbc019 (working tree, uncommitted phase files)
+**Expected baseline commit:** adbc019
+
+#### Diff independently inspected
+- Changed set exactly as claimed; frozen set verified zero-diff per file (model.py, xai.py, config.py, evaluation/**, train_*, requirements*, pytest.ini, 4 existing test files, main.jsx, vite.config.js, index.html, index.css); checkpoint untouched.
+
+#### Architecture integrity
+- PASS — db.py: call-time SCAN_DB_PATH reads, finally-closed connections, double-checked _schema_ready, PRAGMA validation of the 17 columns, sequential (never nested) write lock; main.py: original 7 payload keys byte-identical semantics, all inference inside lock, JSONResponse + DB insert outside, DB-failure → exact original 7-field 200.
+
+#### API compatibility
+- PASS — /health byte-identical; /predict superset per contract; /history 11 lightweight keys; 404/204 correct. Note: reviewer found the planned "History storage error." 500 detail MISSING → fixed in the implementor fix-loop (try/except added to all three handlers + 3 tests).
+
+#### Database/migration safety
+- PASS — schema idempotent; incompatible existing schema → clean RuntimeError surfaced as sanitized 500; no shipped DB.
+
+#### Model integrity
+- PASS — sha256 recomputed 5f191bc8…b7bc1; fingerprint endpoint value == freshly computed hash (verified live).
+
+#### Automated tests rerun
+```text
+53 passed in 5.33s / 53 passed in 4.49s (review)
+56 passed in 4.83s (after fix-loop, orchestrator)
+```
+
+#### Frontend build rerun
+```text
+vite build ✓ (jspdf 341.55 kB + html2canvas 199.55 kB code-split chunks); oxlint 0 warnings 0 errors
+```
+
+#### Manual regression performed
+- Reviewer live uvicorn smoke: predict → 200 with original+additive fields (source dims 180×218 for Y1.jpg), history list/detail/delete flows, 204 empty body, 404s. Orchestrator live browser verification: all three pages rendered correctly (screenshots reviewed), PDF download event fired. Cleanup: servers stopped, seeded neuroscan.db deleted.
+
+#### Blocking findings
+- none
+
+#### Non-blocking findings
+- (fixed in fix-loop) missing "History storage error." 500 detail; hardcoded StatusDot. Remaining: exportPdf starts oversized sections on a fresh page (conservative); SQLite default busy timeout without WAL (fine at scale); formatBytes duplication.
+
+#### Decision
+APPROVED WITH NON-BLOCKING NOTES (fix-loop applied; 56 tests green)
+
+#### Required next action
+- Commit phase-4; proceed to Phase 5.
 
 ## Gate Decision
 
-**Decision:** BLOCKED  
-**Phase 5 may start:** NO
+**Decision:** APPROVED (with non-blocking notes; reviewer findings addressed in fix-loop)
+**Phase 5 may start:** YES
+**Committed as:** phase-4 commit (see Git history)
 
 ---
 

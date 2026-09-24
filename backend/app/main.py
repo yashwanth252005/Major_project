@@ -2,34 +2,43 @@
 FastAPI backend for the Brain Tumour Detection + Unified XAI dashboard.
 
 Endpoints:
-  GET  /health              -> liveness check + model status
+  GET  /health               -> liveness check + model status
   POST /predict              -> upload an MRI slice (png/jpg), get back
                                  { prediction, confidence, gradcam, lrp, shap }
                                  where the three XAI fields are base64 PNG
-                                 heatmap overlays.
+                                 heatmap overlays. The scan is persisted to
+                                 the history DB and the stored record (id,
+                                 metadata) is merged into the response.
+  GET  /history              -> scan history (metadata only, no images)
+  GET  /history/{scan_id}    -> one full scan record incl. XAI images
+  DELETE /history/{scan_id}  -> delete one scan record
 """
 
 import base64
 import logging
 import os
 import threading
+import time
 
 import cv2
 import numpy as np
 import torch
-from fastapi import FastAPI, File, UploadFile, HTTPException
+from fastapi import FastAPI, File, UploadFile, HTTPException, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
+from . import db as app_db
 from .config import IMG_SIZE, MAX_UPLOAD_BYTES, ALLOWED_IMAGE_EXTENSIONS, MAX_UPLOAD_MB
 from .model import BrainTumorCNN
-from .preprocessing import preprocess_bytes as _preprocess
+from .model_info import model_fingerprint
+from .preprocessing import image_dimensions, preprocess_bytes as _preprocess
 from .xai import grad_cam, lrp, shap_explanation, overlay_heatmap
 
 logger = logging.getLogger(__name__)
 
 MODEL_PATH = os.environ.get("MODEL_PATH", "model_weights.pt")
 DEMO_DATA_DIR = os.environ.get("DEMO_DATA_DIR", "demo_data")
+MODEL_NAME = "BrainTumorCNN"
 
 app = FastAPI(title="Brain Tumour XAI API")
 
@@ -132,8 +141,10 @@ async def predict(file: UploadFile = File(...)):
     if not contents:
         raise HTTPException(status_code=400, detail="Empty file uploaded.")
 
+    t0 = time.perf_counter()
     with _inference_lock:
         try:
+            src_w, src_h = image_dimensions(contents)
             input_tensor, display_img = _preprocess(contents)
         except Exception:
             logger.exception("Failed to preprocess uploaded image")
@@ -165,14 +176,107 @@ async def predict(file: UploadFile = File(...)):
 
         original_b64 = _encode_png(cv2.cvtColor(display_img, cv2.COLOR_GRAY2BGR))
 
-        return JSONResponse(
+        payload = {
+            "prediction": label,
+            "raw_probability": round(prob, 6),
+            "confidence": round(confidence * 100, 2),
+            "original_image": original_b64,
+            "gradcam": _encode_png(cam_overlay),
+            "lrp": _encode_png(lrp_overlay),
+            "shap": shap_b64,
+        }
+        processing_time_ms = round((time.perf_counter() - t0) * 1000, 2)
+
+    # Persist outside the inference lock so history I/O never blocks other scans.
+    try:
+        rec = app_db.insert_scan(
             {
-                "prediction": label,
-                "raw_probability": round(prob, 6),
-                "confidence": round(confidence * 100, 2),
-                "original_image": original_b64,
-                "gradcam": _encode_png(cam_overlay),
-                "lrp": _encode_png(lrp_overlay),
-                "shap": shap_b64,
+                "filename": file.filename,
+                "content_type": file.content_type,
+                "size_bytes": len(contents),
+                "source_width": src_w,
+                "source_height": src_h,
+                "prediction": payload["prediction"],
+                "confidence": payload["confidence"],
+                "raw_probability": payload["raw_probability"],
+                "processing_time_ms": processing_time_ms,
+                "model_name": MODEL_NAME,
+                "model_fingerprint": model_fingerprint(MODEL_PATH),
+                "original_image": payload["original_image"],
+                "gradcam": payload["gradcam"],
+                "lrp": payload["lrp"],
+                "shap": payload["shap"],
             }
         )
+    except Exception:
+        logger.exception("Failed to persist scan history")
+    else:
+        payload["id"] = rec["id"]
+        payload["created_at"] = rec["created_at"]
+        payload["filename"] = rec["filename"]
+        payload["content_type"] = rec["content_type"]
+        payload["size_bytes"] = rec["size_bytes"]
+        payload["source_dimensions"] = {
+            "width": rec["source_width"],
+            "height": rec["source_height"],
+        }
+        payload["processing_time_ms"] = rec["processing_time_ms"]
+        payload["model_name"] = rec["model_name"]
+        payload["model_fingerprint"] = rec["model_fingerprint"]
+
+    return JSONResponse(payload)
+
+
+@app.get("/history")
+def history_list():
+    """Scan history — metadata only (no base64 image payloads)."""
+    try:
+        rows = app_db.list_scans()
+    except Exception:
+        logger.exception("History storage error")
+        raise HTTPException(status_code=500, detail="History storage error.")
+    items = []
+    for row in rows:
+        items.append(
+            {
+                "id": row["id"],
+                "created_at": row["created_at"],
+                "filename": row["filename"],
+                "content_type": row["content_type"],
+                "size_bytes": row["size_bytes"],
+                "source_dimensions": {
+                    "width": row["source_width"],
+                    "height": row["source_height"],
+                },
+                "prediction": row["prediction"],
+                "confidence": row["confidence"],
+                "raw_probability": row["raw_probability"],
+                "processing_time_ms": row["processing_time_ms"],
+                "model_name": row["model_name"],
+            }
+        )
+    return items
+
+
+@app.get("/history/{scan_id}")
+def history_detail(scan_id: str):
+    try:
+        rec = app_db.get_scan(scan_id)
+    except Exception:
+        logger.exception("History storage error")
+        raise HTTPException(status_code=500, detail="History storage error.")
+    if rec is None:
+        raise HTTPException(status_code=404, detail="Scan record not found.")
+    return rec
+
+
+@app.delete("/history/{scan_id}")
+def history_delete(scan_id: str):
+    try:
+        deleted = app_db.delete_scan(scan_id)
+    except Exception:
+        logger.exception("History storage error")
+        raise HTTPException(status_code=500, detail="History storage error.")
+    if not deleted:
+        raise HTTPException(status_code=404, detail="Scan record not found.")
+    return Response(status_code=204)

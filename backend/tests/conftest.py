@@ -36,3 +36,10 @@ def demo_image_bytes():
         if path.is_file() and path.suffix in IMAGE_SUFFIXES:
             return path.read_bytes()
     raise RuntimeError(f"No image with suffix in {IMAGE_SUFFIXES} found in {demo_dir}")
+
+
+@pytest.fixture(autouse=True)
+def isolated_scan_db(tmp_path, monkeypatch):
+    from app import db as app_db
+    monkeypatch.setattr(app_db, "SCAN_DB_PATH", str(tmp_path / "test_neuroscan.db"))
+    monkeypatch.setattr(app_db, "_schema_ready", False)

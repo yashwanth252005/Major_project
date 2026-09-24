@@ -30,7 +30,8 @@ def test_predict_happy_path_response_shape(client, demo_image_bytes, mocked_xai)
     )
     assert response.status_code == 200
     body = response.json()
-    assert set(body) == {
+    # Phase 4 adds history metadata fields
+    assert {
         "prediction",
         "raw_probability",
         "confidence",
@@ -38,7 +39,7 @@ def test_predict_happy_path_response_shape(client, demo_image_bytes, mocked_xai)
         "gradcam",
         "lrp",
         "shap",
-    }
+    } <= set(body)
     assert body["prediction"] in {"Tumour Detected", "No Tumour Detected"}
     assert isinstance(body["raw_probability"], float)
     assert 0.0 <= body["raw_probability"] <= 1.0

@@ -17,3 +17,8 @@ def preprocess_bytes(image_bytes: bytes) -> tuple[torch.Tensor, np.ndarray]:
     norm = (arr - 0.5) / 0.5
     tensor = torch.from_numpy(norm).unsqueeze(0).unsqueeze(0).float()
     return tensor, display_img
+
+
+def image_dimensions(image_bytes: bytes) -> tuple[int, int]:
+    """Returns (width, height) read from the image header (no full decode)."""
+    return Image.open(io.BytesIO(image_bytes)).size

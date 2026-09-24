@@ -17,6 +17,9 @@ brats_prepared/
 # Evaluation output (backend/evaluation/evaluate.py)
 backend/evaluation_output/
 
+# Scan history SQLite database (backend/app/db.py)
+neuroscan.db
+
 # Virtual Environments (DO NOT COMMIT)
 venv/
 .venv/

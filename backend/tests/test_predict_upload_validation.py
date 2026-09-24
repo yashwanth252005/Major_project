@@ -95,7 +95,8 @@ def test_predict_valid_png_still_200(client, tiny_png_bytes, mocked_xai):
     )
     assert response.status_code == 200
     body = response.json()
-    assert set(body) == {
+    # Phase 4 adds history metadata fields
+    assert {
         "prediction",
         "raw_probability",
         "confidence",
@@ -103,7 +104,7 @@ def test_predict_valid_png_still_200(client, tiny_png_bytes, mocked_xai):
         "gradcam",
         "lrp",
         "shap",
-    }
+    } <= set(body)
     for key in ("original_image", "gradcam", "lrp", "shap"):
         assert body[key]  # non-empty string
         assert base64.b64decode(body[key]).startswith(b"\x89PNG")
