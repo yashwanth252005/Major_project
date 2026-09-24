@@ -10,7 +10,6 @@ Endpoints:
 """
 
 import base64
-import io
 import logging
 import os
 import threading
@@ -21,10 +20,10 @@ import torch
 from fastapi import FastAPI, File, UploadFile, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
-from PIL import Image
 
 from .config import IMG_SIZE, MAX_UPLOAD_BYTES, ALLOWED_IMAGE_EXTENSIONS, MAX_UPLOAD_MB
 from .model import BrainTumorCNN
+from .preprocessing import preprocess_bytes as _preprocess
 from .xai import grad_cam, lrp, shap_explanation, overlay_heatmap
 
 logger = logging.getLogger(__name__)
@@ -88,17 +87,6 @@ def _load_background(n=16):
 
 
 _load_model()
-
-
-def _preprocess(image_bytes: bytes) -> tuple[torch.Tensor, np.ndarray]:
-    """Returns (model_input_tensor[1,1,H,W], display_uint8[H,W])."""
-    pil_img = Image.open(io.BytesIO(image_bytes)).convert("L")
-    pil_img = pil_img.resize((IMG_SIZE, IMG_SIZE))
-    arr = np.array(pil_img).astype(np.float32) / 255.0
-    display_img = np.uint8(arr * 255)
-    norm = (arr - 0.5) / 0.5
-    tensor = torch.from_numpy(norm).unsqueeze(0).unsqueeze(0).float()
-    return tensor, display_img
 
 
 def _encode_png(bgr_uint8: np.ndarray) -> str:

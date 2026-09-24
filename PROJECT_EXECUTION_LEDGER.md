@@ -210,7 +210,7 @@ train_real.py). It is used only as SHAP background sampling at inference time.
 | 0 | COMPLETE | COMPLETE | COMPLETE | APPROVED WITH NON-BLOCKING NOTES | 628cd7c (files committed after) |
 | 1 | COMPLETE | COMPLETE | COMPLETE | APPROVED WITH NON-BLOCKING NOTES | 2996163 (files committed after) |
 | 2 | COMPLETE | COMPLETE | COMPLETE | APPROVED | 1f72ab7 (files committed after) |
-| 3A Evaluation Framework | NOT STARTED | NOT STARTED | NOT STARTED | BLOCKED | — |
+| 3A Evaluation Framework | COMPLETE | COMPLETE | COMPLETE | APPROVED | dbf4aea (files committed after) |
 | 3B Evaluation Results | WAITING FOR 3A | WAITING FOR DATASET | NOT STARTED | PENDING DATASET | — |
 | 4 | NOT STARTED | NOT STARTED | NOT STARTED | BLOCKED | — |
 | 5 | NOT STARTED | NOT STARTED | NOT STARTED | BLOCKED | — |
@@ -244,7 +244,7 @@ PENDING DATASET
 ## Evaluation State
 
 ```text
-FRAMEWORK STATUS: NOT STARTED
+FRAMEWORK STATUS: APPROVED (Phase 3A, 2026-09-25)
 DATASET STATUS: PENDING
 DATASET INDEPENDENCE: NOT VERIFIED
 RESULT STATUS: PENDING DATASET
@@ -747,23 +747,151 @@ _Not started._
 # Phase 3A — Evaluation Framework
 
 ## Planner Record
-_Not started._
+
+### Planner Record — Phase 3A
+
+**Session ID:** PHASE-3A-PLANNER (orchestrator-dispatched independent subagent)
+**Date:** 2026-09-25
+**Starting commit:** dbf4aea (phase-2 commit)
+**Branch:** main
+**Model SHA-256:** 5f191bc80ec9d558bccbbbf10824e1a020c1450d3a037d68a75d12b475ab7bc1 (unchanged)
+
+#### Current state verified
+- HEAD dbf4aea; 21 tests pass. matplotlib 3.10.9 present transitively via captum; sklearn 1.7.2, numpy 2.2.6. _preprocess lives in app/main.py (module import has model-loading side effect). demo_data/yes=155, no=98; brain_tumor_dataset duplicate is a CHILD dir of demo_data → name-based immediate-child class mapping excludes it.
+- Production decision rules to mirror exactly: positive iff p >= threshold (0.5 inclusive); confidence = max(p, 1-p).
+
+#### Planned changes
+- NEW backend/app/preprocessing.py (preprocess_bytes — exact body moved from main.py); main.py delegates (behavior byte-identical; test_preprocess.py passes unmodified).
+- NEW backend/evaluation/ package: metrics.py (pure functions: confusion [[TN,FP],[FN,TP]] rows=true, binary metrics, per-class one-vs-rest + macro/weighted, ECE 10-bin min(floor(p*10),9), Brier, confidence_analysis), evaluate.py (CLI: --data-dir --output-dir --threshold --batch --high-confidence --uncertain-low/high --model-path; loads model exactly like main.py; writes 12 artifacts incl. run_metadata.json with git commit + model sha256 + class counts + versions, predictions/per_class/confidence/calibration CSVs, confusion matrices PNG+JSON, reliability_diagram.png, EVALUATION_REPORT.md with limitations + non-clinical disclaimer).
+- NEW tests: test_evaluation_metrics.py (synthetic known-value cases, orientation locks, zero-division conventions, sklearn cross-checks), test_evaluation_integration.py (slow, 4-image tmp dataset, wiring only, NO performance assertions).
+- requirements.txt: +matplotlib>=3.7.0 (explicit declaration of transitive dep). .gitignore: +backend/evaluation_output/.
+
+#### Metric definitions locked
+- specificity = TN/(TN+FP); balanced acc = (recall+specificity)/2; per-class one-vs-rest, macro = unweighted mean, weighted = support-weighted; Brier = mean (p-y)^2; ECE = Σ (n_B/N)·|acc_B − conf_B| over 10 equal-width bins, bin = min(int(p*10), 9); zero-division → 0.0; uncertain band inclusive [0.4, 0.6] defaults; high-confidence error default ≥ 0.9.
+
+#### ORCHESTRATOR CORRECTION to plan test vectors (recorded before implementation)
+- Plan Case A expected ECE 0.275 is WRONG: correct value is 0.325 (gaps: |1-0.9|+|1-0.8|+|1-0.7|+|1-0.3|+|0-0.2|+|0-0.1|+|0-0.6|+|0-0.4| = 2.6, /8). Plan Case B was underspecified (exact y_score not given). Implementor instructed to independently re-derive EVERY expected value from the formulas and treat the formulas — not the plan's numbers — as normative; metric functions must never be tuned to match an incorrect expectation.
+
+#### API impact
+- None. /health and /predict response schema untouched; only main.py change is the preprocessing delegate.
+
+#### Risks
+- Delegate edit behavior drift (mitigated: pure move + unmodified test_preprocess.py recomputes normalization); ECE float edges (min(floor(p*10),9) locked by test with pytest.approx 1e-9); dataset double-counting (immediate-child mapping); zero-division convention fixed to 0.0 and cross-checked vs sklearn.
+
+#### Rollback
+- Single revert; 21-test baseline is the restore gate.
+
+#### Acceptance criteria
+1. 21 original tests unmodified + new tests green; 2. model sha unchanged; zero diff on model.py/xai.py/config.py; 3. docstring command runs end-to-end on demo_data producing all artifacts with counts yes=155/no=98; 4. known-value metric tests pass exactly; 5. evaluation run leaves git status clean (output dir ignored).
+
+#### Planner decision
+READY FOR IMPLEMENTATION (with orchestrator's test-vector correction above)
 
 ## Implementor Record
-_Not started._
+
+### Implementor Record — Phase 3A
+
+**Session ID:** PHASE-3A-IMPLEMENTOR (orchestrator-dispatched independent subagent)
+**Starting commit:** dbf4aea
+**Ending commit:** (committed by orchestrator after APPROVED)
+**Branch:** main
+
+#### Planner record followed
+- yes; noted deviations: (1) Case B concrete vector substituted (orchestrator's example had a false positive at t=0.5); Brier 0.075 / ECE 0.25 derived; (2) run_evaluation re-exported lazily (PEP 562) to avoid a RuntimeWarning under `python -m evaluation.evaluate`; (3) unused io/PIL imports removed from main.py; (4) calibration_data.csv lists all 10 bins incl. empty.
+- ORCHESTRATOR CORRECTION applied: Case A ECE asserted at 0.325 (plan's 0.275 was wrong); one real bug found during testing (compute_brier mis-unpacking) and fixed — no metric was ever tuned toward an expected number.
+
+#### Files changed
+- NEW: backend/app/preprocessing.py; backend/evaluation/{__init__.py, metrics.py, evaluate.py}; backend/tests/test_evaluation_metrics.py (15 tests); backend/tests/test_evaluation_integration.py (1 slow test).
+- MODIFIED: backend/app/main.py (delegate; unused imports removed), backend/requirements.txt (+matplotlib>=3.7.0), .gitignore (+backend/evaluation_output/).
+
+#### Functional changes
+- None to inference: preprocessing body moved verbatim to app/preprocessing.py; main.py delegates. New standalone evaluator reusing production model/preprocessing exactly; 12 artifacts; gitignored output dir.
+
+#### Tests added
+- 16 (15 known-value metric tests with derivation comments + sklearn cross-checks + orientation lock; 1 slow 4-image end-to-end wiring test without performance assertions). Total suite: 37.
+
+#### Commands executed
+```text
+cd backend && ./venv/Scripts/python.exe -m pytest   (3 green runs)
+cd backend && ./venv/Scripts/python.exe -m evaluation.evaluate --data-dir demo_data --output-dir evaluation_output
+```
+
+#### Test results
+```text
+37 passed in 4.86s (final; three consecutive green runs)
+```
+
+#### Smoke run (NOT final evaluation results — Phase 3B governs)
+- 253 images, ~11s CPU. run_metadata: commit dbf4aea, model sha 5f191bc8…b7bc1, class_counts {no:98, yes:155}. Indicative metrics: accuracy 0.6126, precision 0.7664, recall 0.5290, specificity 0.7449, F1 0.6260, balanced acc 0.6370, ECE 0.2907, Brier 0.3129; confusion [[73,25],[73,82]] (internally consistent). These figures are smoke-run output only and MUST NOT be cited as final model performance.
+
+#### Model SHA-256 after implementation
+- 5f191bc80ec9d558bccbbbf10824e1a020c1450d3a037d68a75d12b475ab7bc1 (unchanged)
+
+#### Deviations from plan
+- The four noted above.
+
+#### Unresolved items
+- none
+
+#### Implementor status
+READY FOR REVIEW
 
 ## Independent Reviewer Record
-_Not started._
+
+### Independent Reviewer Record — Phase 3A
+
+**Session ID:** PHASE-3A-REVIEWER (orchestrator-dispatched independent subagent)
+**Reviewed commit:** dbf4aea (working tree, uncommitted phase files)
+**Expected baseline commit:** dbf4aea
+
+#### Diff independently inspected
+- Changed set exactly as claimed; frozen files zero-diff (verified per-file); preprocessing.py body byte-equivalent to old _preprocess; main.py /health + /predict logic and payload byte-identical.
+
+#### Metric implementation audit (math independently re-derived BEFORE running code)
+- Reviewer hand-derived every case, then ran the functions: all match (Case A 0.75×6/0.15/0.325/[[3,1],[1,3]]; Case C zero-division conventions; Case D 0.4625/0.406875/bin9; t=0.65 0.875/1.0/0.75/6-7; Case 7 0.75 mean/2/2). Code audit confirms normative formulas incl. min(int(p*10),9) binning (float subtlety 0.7*10==7.0 verified in venv), zero-division→0.0, [[TN,FP],[FN,TP]] orientation, inclusive threshold/band. Edge probes: empty inputs, p=1.0, empty bins/groups. sklearn cross-checks pass. No tuning of functions to expectations.
+
+#### Architecture integrity
+- PASS — no inference-behavior change; evaluator reuses app.model + app.preprocessing + app.config (no copy-paste); matplotlib Agg; no torch imports in metrics.py.
+
+#### API compatibility
+- PASS — API surface byte-identical; all 21 original tests unmodified and green.
+
+#### Database/migration safety
+- N/A.
+
+#### Model integrity
+- PASS — sha256 independently recomputed: 5f191bc8…b7bc1.
+
+#### Automated tests rerun
+```text
+Run 1: 37 passed in 4.10s
+Run 2: 37 passed in 4.14s
+```
+
+#### End-to-end verification
+- Reviewer ran the evaluator into a temp dir: 12 artifacts; 253 predictions; class_counts {no:98, yes:155}; metadata commit/sha correct; internal consistency recomputed from artifacts (confusion sums, accuracy from cm, ECE from calibration CSV = 0.2906901 matching metrics.json; misclassified = 98 = FP+FN); threshold rule verified on all rows. Temp dir cleaned up.
+
+#### Blocking findings
+- none
+
+#### Non-blocking findings
+- per_class_metrics.csv "support" column holds N for macro/weighted rows (cosmetic); class_counts keyed by raw dir name (case-sensitive; demo_data lowercase so no impact); uncertain band defined on raw p (documented convention); metrics.json minor redundancy.
+
+#### Decision
+APPROVED
+
+#### Required next action
+- Commit phase-3a; Phase 3B may proceed (dataset approval is the next gate).
 
 ## Framework Gate
 
 ```text
-FRAMEWORK STATUS: NOT STARTED
+FRAMEWORK STATUS: APPROVED
 DATASET STATUS: PENDING
 RESULT STATUS: PENDING DATASET
 ```
 
-**Phase 4 may start:** NO
+**Phase 4 may start:** YES (framework approved; 3B can execute in parallel/after)
 
 A framework can be approved even when the independent dataset is not yet available.
 

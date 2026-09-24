@@ -14,6 +14,9 @@ __pycache__/
 # Generated preprocessing output (prepare_brats.py)
 brats_prepared/
 
+# Evaluation output (backend/evaluation/evaluate.py)
+backend/evaluation_output/
+
 # Virtual Environments (DO NOT COMMIT)
 venv/
 .venv/
