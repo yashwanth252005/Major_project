@@ -12,6 +12,8 @@ Endpoints:
   GET  /history              -> scan history (metadata only, no images)
   GET  /history/{scan_id}    -> one full scan record incl. XAI images
   DELETE /history/{scan_id}  -> delete one scan record
+  GET  /stats                -> application-history statistics over stored
+                                 scans (aggregate counts/averages, no images)
 """
 
 import base64
@@ -280,3 +282,13 @@ def history_delete(scan_id: str):
     if not deleted:
         raise HTTPException(status_code=404, detail="Scan record not found.")
     return Response(status_code=204)
+
+
+@app.get("/stats")
+def stats():
+    """Application-history statistics over stored scans (no image payloads)."""
+    try:
+        return app_db.scan_stats()
+    except Exception:
+        logger.exception("Stats storage error")
+        raise HTTPException(status_code=500, detail="Stats storage error.")

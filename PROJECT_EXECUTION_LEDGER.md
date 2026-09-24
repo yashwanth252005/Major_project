@@ -213,7 +213,7 @@ train_real.py). It is used only as SHAP background sampling at inference time.
 | 3A Evaluation Framework | COMPLETE | COMPLETE | COMPLETE | APPROVED | dbf4aea (files committed after) |
 | 3B Evaluation Results | COMPLETE | COMPLETE (EVAL-001) | COMPLETE | APPROVED WITH NON-BLOCKING NOTES | 58de4ed (docs committed after) |
 | 4 | COMPLETE | COMPLETE (+fix-loop) | COMPLETE | APPROVED WITH NON-BLOCKING NOTES | adbc019 (files committed after) |
-| 5 | NOT STARTED | NOT STARTED | NOT STARTED | BLOCKED | — |
+| 5 | COMPLETE | COMPLETE | COMPLETE | APPROVED | b13dd4c (files committed after) |
 | 6 | NOT STARTED | NOT STARTED | NOT STARTED | BLOCKED | — |
 | 7 | NOT STARTED | NOT STARTED | NOT STARTED | BLOCKED | — |
 
@@ -1308,18 +1308,138 @@ APPROVED WITH NON-BLOCKING NOTES (fix-loop applied; 56 tests green)
 # Phase 5 — History Explorer & Insights
 
 ## Planner Record
-_Not started._
+
+### Planner Record — Phase 5
+
+**Session ID:** PHASE-5-PLANNER (orchestrator-dispatched independent subagent)
+**Date:** 2026-09-25
+**Starting commit:** b13dd4c (phase-4 commit)
+**Branch:** main
+**Model SHA-256:** 5f191bc80ec9d558bccbbbf10824e1a020c1450d3a037d68a75d12b475ab7bc1 (re-verified)
+
+#### Binding decisions (D1–D14)
+- D1–D2: stats computed in db.py via NEW read-only `scan_stats(now=None)` — ONE SQL aggregate query, never selects blob columns; injectable `now` for deterministic window tests.
+- D3: rolling windows (now − 168h/720h, inclusive cutoff) via LEXICOGRAPHIC string comparison on created_at (single writer locks ISO-8601 UTC format); locked by code comment + test.
+- D4–D6: 0 scans → counts 0, averages/latest NULL (never false measurements); averages rounded 2dp; count_by_prediction zero-filled for both known labels + GROUP BY overlay.
+- D7: /stats failure → 500 "Stats storage error." (distinct sanitized message).
+- D8–D12: explorer fully CLIENT-SIDE in HistoryList.jsx with useMemo (search over filename+prediction+id, class select, min-confidence number input, local-calendar date range via native date inputs, 4-mode sort with stable sort, clear filters, "Showing X of Y scans" count, "No scans match the selected filters." empty state). NO /history API change, no query params ever sent.
+- D13–D14: nav order Analyze · History · Insights; no frontend test runner (build + lint + orchestrator browser pass).
+
+#### /stats contract (locked)
+```json
+{"total_scans": int, "count_by_prediction": {"Tumour Detected": n, "No Tumour Detected": n},
+ "average_confidence_percent": float|null, "average_processing_time_ms": float|null,
+ "latest_scan_created_at": iso-str|null, "scans_last_7_days": int, "scans_last_30_days": int}
+```
+
+#### Wording guardrails (hard rules)
+- NEVER label these accuracy/sensitivity/specificity/prevalence/F1/diagnostic performance/AUC/ECE; distribution section labeled exactly "Stored prediction distribution"; mandatory neutral caption on /insights: "These are application-history statistics about scans stored in this browser deployment — not model performance metrics." Grep-enforced at acceptance (docs/evaluation out of scope for the grep).
+
+#### Files to change
+- backend: db.py (+scan_stats, +timedelta import), main.py (+GET /stats, docstring), NEW tests/test_stats_api.py (7 tests → suite 63). Frontend: api.js (+fetchStats), HistoryList.jsx (explorer), NEW pages/Insights.jsx, App.jsx (+route+nav), App.css (+Phase 5 section). NO new dependencies.
+- Frozen: DDL + existing db functions, /predict, existing tests, Home/ScanDetail/exportPdf, docs/evaluation, package.json deps.
+
+#### Risks
+- Lexicographic date comparison (locked by single writer + test); oxlint hooks deps on the useMemo (all deps listed); float AVG rounding robustness (test values chosen robustly).
+
+#### Rollback
+- Single revert of phase-5 commit; purely additive.
+
+#### Acceptance criteria
+1. 63 tests pass, no existing test edited; 2. build + lint clean; 3. /history response unchanged (history tests untouched and green); 4. browser pass: filters/sorts/clear/count/empty state, /insights six stats + distribution + caption + zero-scan + error states; 5. wording grep clean; 6. /stats SQL-aggregated without blob reads.
+
+#### Planner decision
+PROCEED
 
 ## Implementor Record
-_Not started._
+
+### Implementor Record — Phase 5
+
+**Session ID:** PHASE-5-IMPLEMENTOR (orchestrator-dispatched independent subagent)
+**Starting commit:** b13dd4c
+**Branch:** main
+
+#### Planner record followed
+- yes; one deviation: the plan's date-window test seed 2026-08-01 was arithmetically outside the 30-day window for the pinned now (2026-09-25T12:00Z) — implementor moved the middle seed to 2026-09-01 to preserve the asserted windows {1, 2}. Reviewer verified this correction independently.
+
+#### Files changed
+- backend/app/db.py (+scan_stats single-aggregate + GROUP BY overlay), backend/app/main.py (+GET /stats, sanitized 500), NEW backend/tests/test_stats_api.py (7), frontend/src/api.js (+fetchStats), frontend/src/pages/HistoryList.jsx (client-side explorer), NEW frontend/src/pages/Insights.jsx, frontend/src/App.jsx (+route/nav), frontend/src/App.css (+Phase 5 section). No new dependencies.
+
+#### Functional changes
+- New GET /stats (application-history statistics; nulls-not-zeros for averages on empty DB); /history page gained search/class/min-confidence/date-range/sort/clear/count with ZERO API change; new /insights page with mandatory neutral caption + "Stored prediction distribution" bars + zero-scan state.
+
+#### Tests added
+- 7 (suite: 63 passed twice).
+
+#### Commands executed
+```text
+cd backend && ./venv/Scripts/python.exe -m pytest (twice: 63 passed)
+cd frontend && npm run build && npm run lint (clean)
+grep wording guardrails (zero hits)
+```
+
+#### Live browser verification (orchestrator)
+- /history: filter bar (search, class, min confidence, from/to dates, sort, clear), "Showing 4 of 4 scans" with 4 seeded rows. /insights: caption + 6 stat cards (4 total, 94.20%, 1177.22 ms, 4/4 windows, latest timestamp) + distribution bars 1/3 matching /stats exactly. Cleanup: servers stopped, seeded neuroscan.db deleted.
+
+#### Model SHA-256 after implementation
+- 5f191bc80ec9d558bccbbbf10824e1a020c1450d3a037d68a75d12b475ab7bc1 (unchanged)
+
+#### Deviations from plan
+- The date-window test seed correction noted above.
+
+#### Implementor status
+READY FOR REVIEW
 
 ## Independent Reviewer Record
-_Not started._
+
+### Independent Reviewer Record — Phase 5
+
+**Session ID:** PHASE-5-REVIEWER (orchestrator-dispatched independent subagent)
+**Reviewed commit:** b13dd4c (working tree, uncommitted phase files)
+**Expected baseline commit:** b13dd4c
+
+#### Diff independently inspected
+- Changed set exactly as claimed; frozen set zero-diff (incl. package.json — no deps); no existing test modified.
+
+#### Stats endpoint audit
+- scan_stats: no blob column in any SELECT (grep); lexicographic-cutoff comment; zero-fill + overlay; None-preserving rounding; live TestClient verification by reviewer: empty DB exact 7-key body; seeded 2 rows → totals/counts/85.28/166.67/latest correct (recomputed round(x,2) semantics in-interpreter); blob sentinels absent from response; temp DB cleaned.
+
+#### Explorer client-side-only proof
+- Only the 3 baseline fetchJson occurrences remain in HistoryList.jsx; no query params; deleteRow byte-identical to baseline; helpers pure at module level; useMemo deps complete; exact empty-filter and count strings verified.
+
+#### Insights wording audit
+- Caption exact; section titled exactly "Stored prediction distribution"; six cards; zero-scan state; repo-wide grep for forbidden terms: zero hits.
+
+#### Automated tests rerun
+```text
+63 passed in 5.09s / 63 passed in 4.92s
+```
+
+#### Frontend build rerun
+```text
+vite build ✓ 211ms; oxlint 0 warnings 0 errors
+```
+
+#### Model integrity
+- PASS — sha256 recomputed 5f191bc8…b7bc1.
+
+#### Blocking findings
+- none
+
+#### Non-blocking findings
+- "single SQL aggregate" is one aggregate + one small GROUP BY (both metadata-only; wording nit); newest-mode sort uses negated ascending comparator (style nit); min-confidence accepts out-of-range values yielding empty results (acceptable).
+
+#### Decision
+APPROVED
+
+#### Required next action
+- Commit phase-5; proceed to Phase 6.
 
 ## Gate Decision
 
-**Decision:** BLOCKED  
-**Phase 6 may start:** NO
+**Decision:** APPROVED
+**Phase 6 may start:** YES
+**Committed as:** phase-5 commit (see Git history)
 
 ---
 

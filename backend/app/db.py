@@ -9,7 +9,7 @@ The database is a single SQLite file whose location is taken from the
 import sqlite3
 import threading
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 import os
 
@@ -146,3 +146,58 @@ def delete_scan(scan_id: str) -> bool:
             return cursor.rowcount > 0
         finally:
             con.close()
+
+
+def scan_stats(now: datetime | None = None) -> dict:
+    """Application-history statistics over stored scans (single aggregate query, no blobs)."""
+    _ensure_schema()
+    now = now or datetime.now(timezone.utc)
+    # created_at is compared as ISO strings: insert_scan is the only writer and
+    # always stores datetime.now(timezone.utc).isoformat(), so lexicographic
+    # order == chronological order for these values.
+    week_cutoff = (now - timedelta(days=7)).isoformat()
+    month_cutoff = (now - timedelta(days=30)).isoformat()
+    con = _connect()
+    try:
+        row = con.execute(
+            """
+            SELECT
+              COUNT(*) AS total_scans,
+              AVG(confidence) AS avg_confidence,
+              AVG(processing_time_ms) AS avg_processing_time_ms,
+              MAX(created_at) AS latest_scan_created_at,
+              SUM(CASE WHEN prediction = 'Tumour Detected' THEN 1 ELSE 0 END) AS tumour_count,
+              SUM(CASE WHEN prediction = 'No Tumour Detected' THEN 1 ELSE 0 END) AS no_tumour_count,
+              COALESCE(SUM(CASE WHEN created_at >= ? THEN 1 ELSE 0 END), 0) AS scans_last_7_days,
+              COALESCE(SUM(CASE WHEN created_at >= ? THEN 1 ELSE 0 END), 0) AS scans_last_30_days
+            FROM scans
+            """,
+            (week_cutoff, month_cutoff),
+        ).fetchone()
+        by_prediction = {
+            r["prediction"]: r["count"]
+            for r in con.execute(
+                "SELECT prediction, COUNT(*) AS count FROM scans GROUP BY prediction"
+            ).fetchall()
+        }
+    finally:
+        con.close()
+
+    count_by_prediction = {"Tumour Detected": 0, "No Tumour Detected": 0}
+    count_by_prediction.update(by_prediction)
+
+    return {
+        "total_scans": row["total_scans"],
+        "count_by_prediction": count_by_prediction,
+        "average_confidence_percent": (
+            round(row["avg_confidence"], 2) if row["avg_confidence"] is not None else None
+        ),
+        "average_processing_time_ms": (
+            round(row["avg_processing_time_ms"], 2)
+            if row["avg_processing_time_ms"] is not None
+            else None
+        ),
+        "latest_scan_created_at": row["latest_scan_created_at"],
+        "scans_last_7_days": row["scans_last_7_days"],
+        "scans_last_30_days": row["scans_last_30_days"],
+    }

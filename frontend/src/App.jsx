@@ -5,6 +5,7 @@ import { API_BASE, fetchJson } from "./api";
 import Home from "./pages/Home";
 import HistoryList from "./pages/HistoryList";
 import ScanDetail from "./pages/ScanDetail";
+import Insights from "./pages/Insights";
 
 function StatusDot({ ok }) {
   return <span className={`status-dot ${ok ? "status-ok" : "status-bad"}`} />;
@@ -70,6 +71,12 @@ export default function App() {
               >
                 History
               </NavLink>
+              <NavLink
+                to="/insights"
+                className={({ isActive }) => `nav-link${isActive ? " nav-link-active" : ""}`}
+              >
+                Insights
+              </NavLink>
             </nav>
           </div>
         </header>
@@ -78,6 +85,7 @@ export default function App() {
           <Route path="/" element={<Home />} />
           <Route path="/history" element={<HistoryList />} />
           <Route path="/history/:id" element={<ScanDetail />} />
+          <Route path="/insights" element={<Insights />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
 

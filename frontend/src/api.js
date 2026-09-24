@@ -9,3 +9,7 @@ export async function fetchJson(url, opts = {}) {
   if (res.status === 204) return null;
   return res.json();
 }
+
+export async function fetchStats() {
+  return fetchJson(`${API_BASE}/stats`);
+}
