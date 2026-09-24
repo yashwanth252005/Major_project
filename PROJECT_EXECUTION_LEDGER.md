@@ -208,7 +208,7 @@ train_real.py). It is used only as SHAP background sampling at inference time.
 | Phase | Planner | Implementor | Reviewer | Gate | Reviewed Commit |
 |---|---|---|---|---|---|
 | 0 | COMPLETE | COMPLETE | COMPLETE | APPROVED WITH NON-BLOCKING NOTES | 628cd7c (files committed after) |
-| 1 | NOT STARTED | NOT STARTED | NOT STARTED | BLOCKED | — |
+| 1 | COMPLETE | COMPLETE | COMPLETE | APPROVED WITH NON-BLOCKING NOTES | 2996163 (files committed after) |
 | 2 | NOT STARTED | NOT STARTED | NOT STARTED | BLOCKED | — |
 | 3A Evaluation Framework | NOT STARTED | NOT STARTED | NOT STARTED | BLOCKED | — |
 | 3B Evaluation Results | WAITING FOR 3A | WAITING FOR DATASET | NOT STARTED | PENDING DATASET | — |
@@ -427,7 +427,145 @@ APPROVED WITH NON-BLOCKING NOTES
 # Phase 1 — Documentation & Hygiene
 
 ## Planner Record
-_Not started._
+
+### Planner Record — Phase 1
+
+**Session ID:** PHASE-1-PLANNER (orchestrator-dispatched independent subagent)
+**Date:** 2026-09-25
+**Starting commit:** 2996163 (phase-0 commit)
+**Branch:** main
+**Model SHA-256:** 5f191bc80ec9d558bccbbbf10824e1a020c1450d3a037d68a75d12b475ab7bc1 (unchanged)
+
+#### Repository state verified
+- HEAD 2996163; tree clean; pytest 13/13 pass; npm build OK (re-verified by planner).
+- demo_data/brain_tumor_dataset byte-identical duplicate of demo_data/no+yes (8.9 MB), diff -rq verified; intentional user commit 4d0f5ed; never read at runtime (main.py:66 reads only tumor/yes/notumor/no at demo_data top level).
+- README problems: P1 stale "synthetic tumor/notumor" claim (README:34); P2 quickstart upload paths tumor/|notumor/ don't exist (README:91); P3 tree root name (README:28); P4 tree missing tests/; P5 LICENSE referenced but missing (README:123); P6 duplicate dataset undocumented.
+- App.jsx blob-URL leak (App.jsx:43, no revokeObjectURL anywhere).
+- .gitignore missing .history/ and brats_prepared/ (prepare_brats.py:53 generates it).
+- N/A verified: requirements.txt already valid; no "lesion region"/summary text anywhere; no "AI Summary"; no "securely stored" (no history feature).
+
+#### Planned changes
+- frontend/src/App.jsx: add useEffect import + effect revoking previous preview blob URL on replacement/unmount (cleanup-after-commit pattern; handleFile untouched).
+- README.md: root name, demo_data tree comment, add tests/ line, quickstart yes/no paths, Data assets note documenting duplicate copy, (LICENSE ref becomes true).
+- .gitignore: add .history/ and brats_prepared/.
+- LICENSE: new MIT file, "Copyright (c) 2026 NeuroScan XAI Authors" (placeholder, user-adjustable — ledger note).
+
+#### Files frozen
+- All backend production code, model, tests, demo_data, control docs (see plan).
+
+#### API impact
+- None.
+
+#### Discovered & deferred
+- train_demo.py:95-98 crashes if run with shipped demo_data (skips generation, DemoDataset expects notumor/) → Phase 2+ backend fix candidate.
+- Duplicate dataset deletion → user decision, documented in README only.
+- App.jsx:17 "exact input feature attributions" wording nit → out of Phase 1 scope.
+
+#### Test plan
+- pytest 13/13; npm run build; git status shows exactly README.md, .gitignore, LICENSE (new), App.jsx.
+
+#### Planner decision
+READY FOR IMPLEMENTATION
+
+## Implementor Record
+
+### Implementor Record — Phase 1
+
+**Session ID:** PHASE-1-IMPLEMENTOR (orchestrator-dispatched independent subagent)
+**Starting commit:** 2996163
+**Ending commit:** (committed by orchestrator after APPROVED)
+**Branch:** main
+
+#### Planner record followed
+- yes; no deviations. (Tree line for tests/ placed as backend-level sibling of app/, matching actual layout — more accurate than the plan's suggested position inside the app/ block.)
+
+#### Files changed
+- README.md (5 doc corrections), .gitignore (+.history/, +brats_prepared/), frontend/src/App.jsx (useEffect import + blob-URL revocation effect; handleFile byte-identical), LICENSE (new MIT file).
+
+#### Functional changes
+- No behavior change except frontend blob-URL lifecycle: previous preview URL revoked after replacement commit; active URL revoked on unmount.
+
+#### Tests added
+- None (Phase 0 suite must still pass — it does).
+
+#### Commands executed
+```text
+cd backend && ./venv/Scripts/python.exe -m pytest
+cd frontend && npm run build
+git status --porcelain / git diff frontend/src/App.jsx
+```
+
+#### Test results
+```text
+13 passed in 3.43s
+vite build: ✓ 17 modules transformed, built in 226ms
+```
+
+#### Model SHA-256 after implementation
+- 5f191bc80ec9d558bccbbbf10824e1a020c1450d3a037d68a75d12b475ab7bc1 (untouched)
+
+#### Deviations from plan
+- none (see planner-record note re tree line placement)
+
+#### Unresolved items
+- LICENSE copyright holder is a placeholder ("NeuroScan XAI Authors") — user-adjustable.
+
+#### Implementor status
+READY FOR REVIEW
+
+## Independent Reviewer Record
+
+### Independent Reviewer Record — Phase 1
+
+**Session ID:** PHASE-1-REVIEWER (orchestrator-dispatched independent subagent)
+**Reviewed commit:** 2996163 (working tree, uncommitted phase files)
+**Expected baseline commit:** 2996163
+
+#### Diff independently inspected
+- Changed set exactly {.gitignore, README.md, frontend/src/App.jsx, LICENSE(new)} + orchestrator ledger edit; backend/tests/data/requirements untouched (verified with porcelain + name-status + strip-trailing-cr content comparison vs git show 2996163).
+
+#### Architecture integrity
+- PASS — no production backend change; frontend change is a 2-hunk lifecycle fix.
+
+#### API compatibility
+- PASS — /health and /predict behavior unchanged; fetch flow byte-identical.
+
+#### Database/migration safety
+- N/A.
+
+#### Model integrity
+- PASS — sha256 recomputed: 5f191bc8…b7bc1 exact; file tracked, not ignored.
+
+#### Automated tests rerun
+```text
+13 passed in 3.34s
+```
+
+#### Frontend build rerun
+```text
+vite v8.1.5: ✓ 17 modules transformed; built in 118ms
+```
+
+#### Manual regression performed
+- Fact-checked every README statement (counts 98/155, byte-identical duplicates via diff -r, runtime-never-read claim vs main.py:56-82, remaining tumor/notumor mentions legitimate); verified React effect cleanup ordering (replacement revoke happens after DOM commit; StrictMode-safe; null-guard); git check-ignore confirms brats_prepared/ covered and model_weights.pt NOT ignored.
+
+#### Blocking findings
+- none
+
+#### Non-blocking findings
+- Duplicate-path wording relative to backend/demo_data/ could be more explicit; ~8.9 MB rounding (on-disk 8.84 MiB vs apparent 8.67 MB); LICENSE holder placeholder; ledger line-ending normalization warning (pre-existing repo-wide).
+
+#### Decision
+APPROVED WITH NON-BLOCKING NOTES
+
+#### Required next action
+- Commit phase-1; proceed to Phase 2 (candidate backend items carried: train_demo.py crash with shipped demo_data; upload validation; inference robustness).
+
+## Gate Decision
+
+**Decision:** APPROVED (with non-blocking notes)
+**Phase 2 may start:** YES
+**Committed as:** phase-1 commit (see Git history)
 
 ## Implementor Record
 _Not started._

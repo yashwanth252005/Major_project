@@ -25,13 +25,14 @@
 ## 📁 Project Structure
 
 ```
-braintumor-xai/
+NeuroScan-XAI/
 ├── backend/
 │   ├── app/
 │   │   ├── main.py          # FastAPI endpoints (/health, /predict) & middleware
 │   │   ├── model.py         # BrainTumorCNN model definition & layer mappings
 │   │   └── xai.py           # Unified Grad-CAM, LRP, and SHAP heatmaps
-│   ├── demo_data/           # Bundled synthetic demo slices (tumor / notumor)
+│   ├── tests/               # Pytest regression suite (13 tests)
+│   ├── demo_data/           # Kaggle brain MRI slices (yes/ = tumour, no/ = normal); original copy in brain_tumor_dataset/
 │   ├── model_weights.pt     # Pre-trained CNN model weights
 │   ├── prepare_brats.py     # 3D BraTS NIfTI (.nii.gz) -> 2D PNG slice converter
 │   ├── train_demo.py        # Demo dataset generator and trainer
@@ -45,6 +46,8 @@ braintumor-xai/
     ├── index.html           # HTML template
     └── package.json         # React & Vite dependencies
 ```
+
+> **Data assets note:** `backend/demo_data/` contains the Kaggle brain MRI dataset twice — as `no/` (98 images) and `yes/` (155 images), and byte-identical copies under `brain_tumor_dataset/no/` and `brain_tumor_dataset/yes/` (the "original dataset" copy added in commit `4d0f5ed`). The duplicate (~8.9 MB) is retained intentionally; removing it is deferred to the repository owner. The backend reads only `no/` and `yes/` (or synthetic `tumor/`/`notumor/` slices that `train_demo.py` generates when `demo_data/` is absent) — the duplicate folder is never read at runtime.
 
 ---
 
@@ -88,7 +91,7 @@ npm install
 npm run dev
 ```
 
-Open `http://localhost:5173` in your browser. Upload sample MRI slices from `backend/demo_data/tumor/` or `backend/demo_data/notumor/` to view real-time predictions and XAI overlay heatmaps.
+Open `http://localhost:5173` in your browser. Upload sample MRI slices from `backend/demo_data/yes/` or `backend/demo_data/no/` to view real-time predictions and XAI overlay heatmaps.
 
 ---
 

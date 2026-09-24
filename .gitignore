@@ -11,6 +11,9 @@ __pycache__/
 *.tmp
 *.temp
 
+# Generated preprocessing output (prepare_brats.py)
+brats_prepared/
+
 # Virtual Environments (DO NOT COMMIT)
 venv/
 .venv/
@@ -38,6 +41,7 @@ frontend/dist/
 # IDE & Text Editors
 .vscode/
 .idea/
+.history/
 *.swp
 *.swo
 *.sublime-workspace

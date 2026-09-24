@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback } from "react";
+import { useState, useRef, useCallback, useEffect } from "react";
 import "./App.css";
 
 const API_BASE = import.meta.env.VITE_API_BASE || "http://localhost:8000";
@@ -36,6 +36,12 @@ export default function App() {
   const [error, setError] = useState(null);
   const [dragOver, setDragOver] = useState(false);
   const inputRef = useRef(null);
+
+  // Revoke the blob URL when it is replaced or the component unmounts.
+  useEffect(() => {
+    if (!previewUrl) return;
+    return () => URL.revokeObjectURL(previewUrl);
+  }, [previewUrl]);
 
   const handleFile = useCallback((f) => {
     if (!f) return;
