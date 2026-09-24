@@ -1,0 +1,7 @@
+metric,value
+correct_count,155
+correct_mean_confidence,0.904070
+incorrect_count,98
+incorrect_mean_confidence,0.862410
+high_confidence_errors,55
+uncertain_count,19

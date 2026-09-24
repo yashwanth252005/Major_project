@@ -1,0 +1,94 @@
+{
+  "generated_at": "2026-09-24T22:09:16.090093+00:00",
+  "dataset": {
+    "dir": "demo_data",
+    "name": "demo_data",
+    "total_samples": 253,
+    "class_counts": {
+      "no": 98,
+      "yes": 155
+    }
+  },
+  "threshold": 0.5,
+  "img_size": 128,
+  "device": "cpu",
+  "confusion_matrix": {
+    "labels": [
+      0,
+      1
+    ],
+    "label_names": [
+      "no",
+      "yes"
+    ],
+    "counts": [
+      [
+        73,
+        25
+      ],
+      [
+        73,
+        82
+      ]
+    ],
+    "normalized": [
+      [
+        0.7448979591836735,
+        0.25510204081632654
+      ],
+      [
+        0.47096774193548385,
+        0.5290322580645161
+      ]
+    ]
+  },
+  "accuracy": 0.6126482213438735,
+  "precision": 0.7663551401869159,
+  "recall": 0.5290322580645161,
+  "specificity": 0.7448979591836735,
+  "f1": 0.6259541984732824,
+  "balanced_accuracy": 0.6369651086240948,
+  "counts": {
+    "tn": 73,
+    "fp": 25,
+    "fn": 73,
+    "tp": 82
+  },
+  "per_class": {
+    "no": {
+      "precision": 0.5,
+      "recall": 0.7448979591836735,
+      "f1": 0.5983606557377049,
+      "support": 98
+    },
+    "yes": {
+      "precision": 0.7663551401869159,
+      "recall": 0.5290322580645161,
+      "f1": 0.6259541984732824,
+      "support": 155
+    },
+    "macro": {
+      "precision": 0.6331775700934579,
+      "recall": 0.6369651086240948,
+      "f1": 0.6121574271054937
+    },
+    "weighted": {
+      "precision": 0.6631820028813121,
+      "recall": 0.6126482213438735,
+      "f1": 0.6152657906152326
+    }
+  },
+  "ece": 0.2906901100263912,
+  "brier": 0.3129331483878312,
+  "confidence_analysis": {
+    "correct_count": 155,
+    "correct_mean_confidence": 0.9040696497465814,
+    "incorrect_count": 98,
+    "incorrect_mean_confidence": 0.8624100646488748,
+    "high_confidence_errors": 55,
+    "high_confidence_threshold": 0.9,
+    "uncertain_count": 19,
+    "uncertain_low": 0.4,
+    "uncertain_high": 0.6
+  }
+}

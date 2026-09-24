@@ -211,7 +211,7 @@ train_real.py). It is used only as SHAP background sampling at inference time.
 | 1 | COMPLETE | COMPLETE | COMPLETE | APPROVED WITH NON-BLOCKING NOTES | 2996163 (files committed after) |
 | 2 | COMPLETE | COMPLETE | COMPLETE | APPROVED | 1f72ab7 (files committed after) |
 | 3A Evaluation Framework | COMPLETE | COMPLETE | COMPLETE | APPROVED | dbf4aea (files committed after) |
-| 3B Evaluation Results | WAITING FOR 3A | WAITING FOR DATASET | NOT STARTED | PENDING DATASET | — |
+| 3B Evaluation Results | COMPLETE | COMPLETE (EVAL-001) | COMPLETE | APPROVED WITH NON-BLOCKING NOTES | 58de4ed (docs committed after) |
 | 4 | NOT STARTED | NOT STARTED | NOT STARTED | BLOCKED | — |
 | 5 | NOT STARTED | NOT STARTED | NOT STARTED | BLOCKED | — |
 | 6 | NOT STARTED | NOT STARTED | NOT STARTED | BLOCKED | — |
@@ -245,10 +245,10 @@ PENDING DATASET
 
 ```text
 FRAMEWORK STATUS: APPROVED (Phase 3A, 2026-09-25)
-DATASET STATUS: PENDING
-DATASET INDEPENDENCE: NOT VERIFIED
-RESULT STATUS: PENDING DATASET
-RESULT REVIEW STATUS: NOT STARTED
+DATASET STATUS: APPROVED (2026-09-25, with disclosures — see Phase 3B Dataset Approval Record)
+DATASET INDEPENDENCE: VERIFIED (checkpoint predates dataset commit; training external to demo_data; SHAP-background reuse disclosed)
+RESULT STATUS: GENERATED AND REVIEWED (EVAL-001 approved with non-blocking notes, 2026-09-25)
+RESULT REVIEW STATUS: APPROVED
 ```
 
 ### Approved Dataset Record
@@ -908,23 +908,239 @@ FRAMEWORK STATUS: APPROVED
 > Conditional. Run when an approved labeled independent dataset is available.
 
 ## Dataset Approval Record
-_Not available._
+
+```text
+Dataset name: bundled Kaggle "brain_tumor_dataset" (classic 253-image brain MRI collection)
+Source: bundled in-repo; introduced in commit 4d0f5ed "Added original datasets"
+Version/release: NOT RECORDED in repo — external URL, uploader, and release identifier unknown
+  (verification note: identification as the widely-circulated 253-image Kaggle brain MRI set is
+  consistent with, but not proven by, repository evidence)
+License/use notes: not stated in repo; research/demonstration use only, non-clinical
+Local path: backend/demo_data/ (classes yes/ = 155 tumour, no/ = 98 normal; sibling
+  brain_tumor_dataset/ is an excluded byte-identical duplicate, cmp-verified)
+Manifest: docs/evaluation/dataset_manifest.txt (algorithm: immediate children of yes/ and no/
+  only, image extensions, sorted relative paths with forward slashes, lines
+  "<sha256-hex>  <relative-path>", UTF-8 LF)
+Manifest SHA-256: (recorded in EVAL-001 after generation)
+Sample count: 253
+Class counts: yes=155, no=98
+Independence evidence: (1) checkpoint backend/model_weights.pt arrived in commit e09d305,
+  BEFORE the dataset commit 4d0f5ed (planner correction: initial commits be19683..fc2e8bb
+  carried a SYNTHETIC notumor/tumor layout; the Kaggle yes/no set arrived only at 4d0f5ed);
+  (2) train_real.py reads only brats_prepared/ (absent from repo — training external);
+  (3) train_demo.py trains on generated synthetic images only; (4) no retraining since e09d305
+  (checkpoint byte-identical, sha 5f191bc8…b7bc1); (5) evaluator scans demo_data non-recursively
+  and excludes the duplicate dir by construction
+Known overlap risk: (a) DOMAIN SHIFT — checkpoint trained on BraTS 2021 FLAIR-style prepared
+  slices, dataset is clinical-style Kaggle MRI; depressed absolute numbers are an expected
+  finding and must not be generalized; (b) 16 dataset images are sampled as SHAP background at
+  inference (torch.no_grad, no weight updates) — disclosed and accepted; (c) external overlap
+  of the Kaggle corpus with BraTS or other sets is unverifiable from the repo — unverified
+Approved by: orchestrator per autonomous mandate (user may revoke/adjust)
+Approval date: 2026-09-25
+Status: APPROVED WITH DISCLOSURES
+```
 
 ## Planner Record
-_Not started._
+
+### Planner Record — Phase 3B
+
+**Session ID:** PHASE-3B-PLANNER (orchestrator-dispatched independent subagent)
+**Date:** 2026-09-25
+**Starting commit:** 58de4ed (phase-3a commit)
+**Branch:** main
+**Model SHA-256:** 5f191bc80ec9d558bccbbbf10824e1a020c1450d3a037d68a75d12b475ab7bc1 (re-verified)
+
+#### Verified findings
+- Dataset composition and byte-identity of the duplicate confirmed via per-file cmp (253 files).
+- PROVENANCE CORRECTION recorded (see approval record): yes/no Kaggle set arrived at 4d0f5ed,
+  replacing the synthetic layout from initial commits; checkpoint predates the dataset commit.
+- Evaluator scan_dataset non-recursive, deterministic (sorted dirs+files, eval mode, no_grad,
+  CPU-only torch build); .gitignore gap identified: anchored pattern backend/evaluation_output/
+  does NOT cover evaluation_output_official/ → official runs use evaluation_output/official and
+  evaluation_output/repro subdirs (zero frozen-file changes).
+- Timestamp-bearing artifacts: metrics.json (generated_at), run_metadata.json
+  (generated_at_utc), EVALUATION_REPORT.md (Generated line). All others timestamp-free.
+
+#### Official run protocol
+- Pre-flight: HEAD==58de4ed; backend/frontend clean; model sha verified; 37/37 pytest.
+- Run 1 official: `cd backend && venv/Scripts/python.exe -m evaluation.evaluate --data-dir demo_data --output-dir evaluation_output/official`
+- Run 2 repro (independent process): `... --output-dir evaluation_output/repro`
+- Reproducibility gate (MANDATORY acceptance): Run 2 byte-identical (sha256) on predictions.csv,
+  misclassified_cases.csv, per_class_metrics.csv, confidence_analysis.csv, calibration_data.csv,
+  confusion_matrix.json; metrics.json/run_metadata.json/report identical modulo timestamps; PNG
+  shas recorded (soft). ANY difference → BLOCK, do not record results.
+- Threshold 0.5 primary only; sensitivity analysis noted as limitation.
+- Curated snapshot → new docs/evaluation/: EVALUATION_REPORT.md (with header block: commit,
+  model sha, manifest sha, approval date, smoke-supersession note), metrics.json,
+  run_metadata.json, confusion_matrix.json, per_class_metrics.csv, confidence_analysis.csv,
+  predictions.csv, both confusion PNGs, reliability_diagram.png, dataset_manifest.txt
+  (~253 lines). Raw outputs stay gitignored.
+
+#### Documentation guardrails
+- Numbers only in docs/evaluation/* and ledger EVAL-001 at this phase; README frozen until
+  Phase 7 (which must reference docs/evaluation/); frontend must carry no performance claims
+  (verified clean); smoke-run figures remain non-citable; all results text carries the
+  non-clinical disclaimer.
+
+#### Files to change
+- docs/evaluation/* (new), PROJECT_EXECUTION_LEDGER.md (orchestrator). Nothing in
+  backend/ or frontend/. .gitignore fallback line only if output-dir naming changes (not needed).
+
+#### Risks
+- Determinism failure → hard BLOCK; raw-output leakage (mitigated by subdir naming);
+  CRLF/LF pinning for the manifest (record sha of file as written); provenance overstatement
+  (forbidden — verification note recorded); poor absolute metrics under domain shift are a
+  legitimate finding reported verbatim; run_metadata records HEAD only — tree condition stated
+  in report header.
+
+#### Rollback
+- rm -r docs/evaluation/ + revert phase-3b commit; no code/data/model changes to unwind.
+
+#### Acceptance criteria
+1. Pre-flight passes; 2. all 12 artifacts written by Run 1; 3. reproducibility gate PASSES; 4.
+  manifest exists (253 file lines) with sha recorded; 5. curated snapshot present with annotated
+  header; 6. EVAL-001 fully populated (binary per-class no/yes) with review PENDING; 7. post-phase
+  git status shows only docs/evaluation/ + ledger; no README/frontend changes.
+
+#### Planner decision
+PROCEED
 
 ## Implementor / Evaluation Run Record
-_Not started._
+
+### Implementor Record — Phase 3B (execution only; no code changes)
+
+**Session ID:** PHASE-3B-IMPLEMENTOR (orchestrator-dispatched independent subagent)
+**Starting commit:** 58de4ed
+**Branch:** main
+
+#### Files changed
+- NEW docs/evaluation/: EVALUATION_REPORT.md (official report + EVAL-001 header block), dataset_manifest.txt, metrics.json, run_metadata.json, confusion_matrix.json, per_class_metrics.csv, confidence_analysis.csv, predictions.csv, confusion_matrix_counts.png, confusion_matrix_normalized.png, reliability_diagram.png. No backend/frontend changes.
+
+### Evaluation Run EVAL-001
+
+**Date:** 2026-09-25
+**Git commit:** 58de4ed3ca1ae0fbd6ffecee901dfaa50751d284 (phase-3a; working tree beyond it contained only control-document/doc additions)
+**Model SHA-256:** 5f191bc80ec9d558bccbbbf10824e1a020c1450d3a037d68a75d12b475ab7bc1
+**Dataset:** bundled Kaggle brain_tumor_dataset @ commit 4d0f5ed (APPROVED WITH DISCLOSURES 2026-09-25)
+**Dataset manifest SHA-256:** ca502c2b8443b0d6d854578cf085caf02e54a2fffb9db02885abc6a17e343335 (docs/evaluation/dataset_manifest.txt, 253 file lines)
+**Sample count:** 253
+**Class counts:** no=98, yes=155
+**Device:** cpu (torch 2.13.0+cpu)
+**Output directory:** backend/evaluation_output/official (raw, gitignored); curated snapshot docs/evaluation/
+
+#### Commands
+```text
+# pre-flight: git rev-parse HEAD / git status / sha256 model / pytest (37 passed)
+cd backend && ./venv/Scripts/python.exe -m evaluation.evaluate --data-dir demo_data --output-dir evaluation_output/official
+cd backend && ./venv/Scripts/python.exe -m evaluation.evaluate --data-dir demo_data --output-dir evaluation_output/repro
+```
+
+#### Reproducibility check
+- Run 2 (independent process) byte-identical to Run 1 on all timestamp-free artifacts
+  (predictions.csv, misclassified_cases.csv, per_class_metrics.csv, confidence_analysis.csv,
+  calibration_data.csv, confusion_matrix.json) AND all three PNGs; metrics.json,
+  run_metadata.json, EVALUATION_REPORT.md identical modulo timestamp fields. GATE: PASS.
+
+#### Required artifacts
+- [x] run_metadata.json — [x] predictions.csv — [x] metrics.json — [x] per_class_metrics.csv
+- [x] confusion_matrix.json — [x] confusion_matrix_counts.png — [x] confusion_matrix_normalized.png
+- [x] confidence_analysis.csv — [x] misclassified_cases.csv (raw output only, per plan)
+- [x] EVALUATION_REPORT.md (curated + header) — [x] reliability_diagram.png — [x] calibration_data.csv (raw output only)
+
+#### Mandatory metrics (binary adaptation; threshold 0.5, positive = tumour)
+```text
+accuracy: 0.6126
+macro precision: 0.6332
+macro recall: 0.6370
+macro F1: 0.6122
+macro specificity (one-vs-rest, = balanced accuracy): 0.6370
+binary specificity (negative class): 0.7449
+weighted precision: 0.6632
+weighted recall: 0.6126
+weighted F1: 0.6153
+```
+
+#### Per-class metrics
+```text
+no  (normal):  precision 0.5000, recall 0.7449, F1 0.5984, support 98
+yes (tumour):  precision 0.7664, recall 0.5290, F1 0.6260, support 155
+```
+
+#### Confusion matrix (rows = true [no, yes], cols = predicted)
+```text
+counts      [[73, 25], [73, 82]]
+normalized  [[0.7449, 0.2551], [0.4710, 0.5290]]
+```
+
+#### Reliability outputs
+```text
+correct mean confidence: 0.9041
+incorrect mean confidence: 0.8624
+high-confidence error count (conf >= 0.9): 55
+uncertain count (0.4 <= p <= 0.6): 19
+ECE (10 equal-width bins, min(int(p*10),9)): 0.2907
+Brier score: 0.3129
+balanced accuracy: 0.6370
+```
+
+#### Limitations
+- Non-clinical, research demonstration only; not a diagnostic tool.
+- DOMAIN SHIFT: checkpoint trained on BraTS 2021 FLAIR-style prepared slices; evaluated on
+  clinical-style Kaggle MRI. Absolute numbers reflect this shift and must not be generalized.
+- Single-dataset evaluation; no external holdout; dataset external provenance/license unrecorded.
+- Results valid at decision threshold p >= 0.5 only (evaluator supports --threshold for
+  future sensitivity analysis).
+- 16 dataset images serve as SHAP background at inference (no_grad, no weight updates) — disclosed.
+- Phase 3A smoke-run figures were indicative only and are superseded by EVAL-001.
+
+#### Independent results review
+PENDING
 
 ## Independent Results Reviewer Record
-_Not started._
+
+### Independent Results Reviewer Record — Phase 3B / EVAL-001
+
+**Session ID:** PHASE-3B-RESULTS-REVIEWER (orchestrator-dispatched independent subagent)
+**Reviewed commit:** 58de4ed (working tree with docs/evaluation/ + ledger)
+**Expected baseline commit:** 58de4ed
+
+#### Independent verification performed
+- Recomputed EVERY claimed metric from docs/evaluation/predictions.csv with own stdlib-only
+  code (no repo code imported): all exact/within 1e-3 of claimed (confusion [[73,25],[73,82]]
+  exact; accuracy 0.612648; per-class and macro/weighted P/R/F1; binary specificity 0.744898;
+  balanced accuracy 0.636965; ECE 0.290690; Brier 0.312933; mean confidences; 55 high-conf
+  errors; 19 uncertain). Threshold rule verified on all 253 rows (0 mismatches).
+- Dataset manifest independently rebuilt with own code: byte-identical, sha256
+  ca502c2b8443b0d6d854578cf085caf02e54a2fffb9db02885abc6a17e343335 == claimed == snapshot file.
+- Run independently reproduced into a temp dir: byte-identical on all timestamp-free artifacts
+  and PNGs; metrics/metadata/report equal modulo timestamps. Temp cleaned; repo state unchanged.
+- Guardrails: no performance figures in frontend/ or README.md (grep sweep). Ledger EVAL-001
+  matches recomputed values; mandatory limitation wording present.
+
+#### Blocking findings
+- none
+
+#### Non-blocking findings
+- predictions.csv uses Windows backslash paths while manifest uses forward slashes (each
+  internally consistent, documented); ~2e-8 ECE/Brier difference between 6-dp CSV recomputation
+  and full-precision metrics.json (expected); metrics.json timestamp 2026-09-24T22:09Z vs ledger
+  date 2026-09-25 (timezone); honest performance observations (modest accuracy 0.61, ECE 0.29
+  overconfidence, 55/98 errors at >=0.9 confidence, class-no precision 0.5) — all disclosed in
+  the report Limitations.
+
+#### Decision
+APPROVED WITH NON-BLOCKING NOTES
+
+#### Required next action
+- Commit phase-3b; proceed to Phase 4.
 
 ## Results Gate
 
 ```text
-DATASET STATUS: PENDING
-DATASET INDEPENDENCE: NOT VERIFIED
-RESULT STATUS: PENDING DATASET
+DATASET STATUS: APPROVED (with disclosures)
+DATASET INDEPENDENCE: VERIFIED
+RESULT STATUS: GENERATED AND REVIEWED (EVAL-001 APPROVED WITH NON-BLOCKING NOTES)
 ```
 
 No model-performance figures may be represented as final while this gate is pending.

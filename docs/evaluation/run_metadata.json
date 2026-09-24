@@ -1,0 +1,28 @@
+{
+  "git_commit": "58de4ed3ca1ae0fbd6ffecee901dfaa50751d284",
+  "model_path": "model_weights.pt",
+  "model_sha256": "5f191bc80ec9d558bccbbbf10824e1a020c1450d3a037d68a75d12b475ab7bc1",
+  "dataset_dir": "demo_data",
+  "dataset_name": "demo_data",
+  "class_counts": {
+    "no": 98,
+    "yes": 155
+  },
+  "total_samples": 253,
+  "threshold": 0.5,
+  "high_conf": 0.9,
+  "uncertain_band": {
+    "low": 0.4,
+    "high": 0.6
+  },
+  "device": "cpu",
+  "generated_at_utc": "2026-09-24T22:09:16.128366+00:00",
+  "img_size": 128,
+  "versions": {
+    "python": "3.10.11",
+    "torch": "2.13.0+cpu",
+    "numpy": "2.2.6",
+    "sklearn": "1.7.2",
+    "matplotlib": "3.10.9"
+  }
+}
