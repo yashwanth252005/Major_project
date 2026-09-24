@@ -11,7 +11,9 @@ Endpoints:
 
 import base64
 import io
+import logging
 import os
+import threading
 
 import cv2
 import numpy as np
@@ -21,10 +23,12 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from PIL import Image
 
+from .config import IMG_SIZE, MAX_UPLOAD_BYTES, ALLOWED_IMAGE_EXTENSIONS, MAX_UPLOAD_MB
 from .model import BrainTumorCNN
 from .xai import grad_cam, lrp, shap_explanation, overlay_heatmap
 
-IMG_SIZE = 128
+logger = logging.getLogger(__name__)
+
 MODEL_PATH = os.environ.get("MODEL_PATH", "model_weights.pt")
 DEMO_DATA_DIR = os.environ.get("DEMO_DATA_DIR", "demo_data")
 
@@ -41,6 +45,7 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 model = BrainTumorCNN(in_channels=1, input_size=IMG_SIZE).to(device)
 model_loaded = False
 background_cache = None
+_inference_lock = threading.Lock()
 
 
 def _load_model():
@@ -117,46 +122,69 @@ async def predict(file: UploadFile = File(...)):
                    "downloading BraTS) to produce model_weights.pt first.",
         )
 
+    ext = os.path.splitext(file.filename or "")[1].lower()
+    if ext not in ALLOWED_IMAGE_EXTENSIONS:
+        raise HTTPException(
+            status_code=400,
+            detail="Unsupported file type. Allowed: .png, .jpg, .jpeg.",
+        )
+
+    if file.size is not None and file.size > MAX_UPLOAD_BYTES:
+        raise HTTPException(
+            status_code=413,
+            detail=f"Uploaded file is too large. Maximum size is {MAX_UPLOAD_MB} MB.",
+        )
+
     contents = await file.read()
-    try:
-        input_tensor, display_img = _preprocess(contents)
-    except Exception as e:
-        raise HTTPException(status_code=400, detail=f"Could not read image: {e}")
+    if len(contents) > MAX_UPLOAD_BYTES:
+        raise HTTPException(
+            status_code=413,
+            detail=f"Uploaded file is too large. Maximum size is {MAX_UPLOAD_MB} MB.",
+        )
+    if not contents:
+        raise HTTPException(status_code=400, detail="Empty file uploaded.")
 
-    with torch.no_grad():
-        logit = model(input_tensor.to(device))
-        prob = torch.sigmoid(logit).item()
+    with _inference_lock:
+        try:
+            input_tensor, display_img = _preprocess(contents)
+        except Exception:
+            logger.exception("Failed to preprocess uploaded image")
+            raise HTTPException(status_code=400, detail="Invalid or unreadable image file.")
 
-    label = "Tumour Detected" if prob >= 0.5 else "No Tumour Detected"
-    confidence = prob if prob >= 0.5 else 1 - prob
+        with torch.no_grad():
+            logit = model(input_tensor.to(device))
+            prob = torch.sigmoid(logit).item()
 
-    # ---- Grad-CAM ----
-    cam = grad_cam(model, input_tensor.clone(), device)
-    cam_overlay = overlay_heatmap(display_img, cam, cv2.COLORMAP_JET)
+        label = "Tumour Detected" if prob >= 0.5 else "No Tumour Detected"
+        confidence = prob if prob >= 0.5 else 1 - prob
 
-    # ---- LRP ----
-    lrp_map = lrp(model, input_tensor.clone(), device)
-    lrp_overlay = overlay_heatmap(display_img, lrp_map, cv2.COLORMAP_INFERNO)
+        # ---- Grad-CAM ----
+        cam = grad_cam(model, input_tensor.clone(), device)
+        cam_overlay = overlay_heatmap(display_img, cam, cv2.COLORMAP_JET)
 
-    # ---- SHAP ----
-    background = _load_background()
-    if background is not None:
-        shap_mag, _ = shap_explanation(model, input_tensor.clone(), device, background, n_samples=40)
-        shap_overlay = overlay_heatmap(display_img, shap_mag, cv2.COLORMAP_VIRIDIS)
-        shap_b64 = _encode_png(shap_overlay)
-    else:
-        shap_b64 = None
+        # ---- LRP ----
+        lrp_map = lrp(model, input_tensor.clone(), device)
+        lrp_overlay = overlay_heatmap(display_img, lrp_map, cv2.COLORMAP_INFERNO)
 
-    original_b64 = _encode_png(cv2.cvtColor(display_img, cv2.COLOR_GRAY2BGR))
+        # ---- SHAP ----
+        background = _load_background()
+        if background is not None:
+            shap_mag, _ = shap_explanation(model, input_tensor.clone(), device, background, n_samples=40)
+            shap_overlay = overlay_heatmap(display_img, shap_mag, cv2.COLORMAP_VIRIDIS)
+            shap_b64 = _encode_png(shap_overlay)
+        else:
+            shap_b64 = None
 
-    return JSONResponse(
-        {
-            "prediction": label,
-            "raw_probability": round(prob, 6),
-            "confidence": round(confidence * 100, 2),
-            "original_image": original_b64,
-            "gradcam": _encode_png(cam_overlay),
-            "lrp": _encode_png(lrp_overlay),
-            "shap": shap_b64,
-        }
-    )
+        original_b64 = _encode_png(cv2.cvtColor(display_img, cv2.COLOR_GRAY2BGR))
+
+        return JSONResponse(
+            {
+                "prediction": label,
+                "raw_probability": round(prob, 6),
+                "confidence": round(confidence * 100, 2),
+                "original_image": original_b64,
+                "gradcam": _encode_png(cam_overlay),
+                "lrp": _encode_png(lrp_overlay),
+                "shap": shap_b64,
+            }
+        )

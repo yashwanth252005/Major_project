@@ -209,7 +209,7 @@ train_real.py). It is used only as SHAP background sampling at inference time.
 |---|---|---|---|---|---|
 | 0 | COMPLETE | COMPLETE | COMPLETE | APPROVED WITH NON-BLOCKING NOTES | 628cd7c (files committed after) |
 | 1 | COMPLETE | COMPLETE | COMPLETE | APPROVED WITH NON-BLOCKING NOTES | 2996163 (files committed after) |
-| 2 | NOT STARTED | NOT STARTED | NOT STARTED | BLOCKED | — |
+| 2 | COMPLETE | COMPLETE | COMPLETE | APPROVED | 1f72ab7 (files committed after) |
 | 3A Evaluation Framework | NOT STARTED | NOT STARTED | NOT STARTED | BLOCKED | — |
 | 3B Evaluation Results | WAITING FOR 3A | WAITING FOR DATASET | NOT STARTED | PENDING DATASET | — |
 | 4 | NOT STARTED | NOT STARTED | NOT STARTED | BLOCKED | — |
@@ -583,7 +583,153 @@ _Not started._
 # Phase 2 — Input & Inference Robustness
 
 ## Planner Record
-_Not started._
+
+### Planner Record — Phase 2
+
+**Session ID:** PHASE-2-PLANNER (orchestrator-dispatched independent subagent)
+**Date:** 2026-09-25
+**Starting commit:** 1f72ab7 (phase-1 commit)
+**Branch:** main
+**Model SHA-256:** 5f191bc80ec9d558bccbbbf10824e1a020c1450d3a037d68a75d12b475ab7bc1 (unchanged)
+
+#### Current behavior confirmed (by inspection + execution)
+- /predict has NO extension/MIME/size validation; garbage with valid extension fails only at PIL; raw exception text leaks in 400 detail; `await file.read()` buffers unbounded; `async def` + CPU-bound work serializes on the event loop (accidental safety, no lock); starlette 1.6.0 populates `UploadFile.size` (verified in installed source) enabling pre-read size checks.
+- SHAP/device handling verified already correct (xai.py:121-122 moves input+background to device; `.to(device)` never mutates the CPU cache) → N/A, no change.
+- train_demo.py:95 crashes with shipped Kaggle-layout demo_data (generation gated on demo_data absence; DemoDataset expects tumor/notumor).
+- Frontend drag-drop bypasses `accept` attribute → backend allowlist is the real gate.
+
+#### Planned changes
+- NEW backend/app/config.py: IMG_SIZE=128, MAX_UPLOAD_MB (env, default 10), MAX_UPLOAD_BYTES, ALLOWED_IMAGE_EXTENSIONS={.png,.jpg,.jpeg}.
+- backend/app/main.py: import config constants (IMG_SIZE stays importable from app_main); add logging + threading.Lock `_inference_lock`; extension check pre-read (400 "Unsupported file type..."); pre-read size check via file.size (413, message derives MAX_UPLOAD_MB); post-read fallbacks (len>MAX → 413, empty → 400 "Empty file uploaded."); lock wraps _preprocess→response construction (no await inside; 503 check + read outside); sanitized 400: logger.exception + "Invalid or unreadable image file.".
+- backend/train_demo.py: generation gate → generate when tumor/ or notumor/ missing (3-line change).
+- Tests: NEW backend/tests/test_predict_upload_validation.py (8 tests: unsupported ext 400, no ext 400, oversize 413, configurable limit 413, empty 400, valid png 200 mocked-XAI, lock exists + predict works, no-internal-leak assertion); Phase 0 test_predict_validation.py: ONLY two detail assertions change to the sanitized message.
+- Frozen: model.py, xai.py, train_real.py, prepare_brats.py, checkpoint, frontend, conftest, pytest.ini.
+
+#### API impact (error matrix)
+- 400 "Unsupported file type. Allowed: .png, .jpg, .jpeg." (NEW); 413 "Uploaded file is too large. Maximum size is 10 MB." (NEW); 400 "Empty file uploaded." (NEW, was generic parse 400); corrupt-content 400 text CHANGED to "Invalid or unreadable image file."; success path + /health byte-identical; 422/503 unchanged. .bmp rejected deliberately (frontend contract is png/jpeg); uppercase extensions accepted.
+
+#### Key planner decisions
+1. Lock = threading.Lock with async def kept (option a) — converts accidental event-loop serialization into enforced safety; zero behavior change; no threadpool migration.
+2. Allowlist {.png,.jpg,.jpeg} case-insensitive.
+3. Pre-read file.size check + post-read len fallback; MAX_UPLOAD_MB env-configurable.
+4. config.py minimal, app-side only; training-script IMG_SIZE duplication judged harmless (frozen by checkpoint + Phase 0 tests).
+5. train_demo.py fix included (out-of-the-box crash, no inference impact).
+
+#### Risks
+- Previously-"working" odd-filename clients now rejected (deliberate); file.size None handled by fallback; no deadlock (no await in critical section, single non-nested lock); pytest captures ERROR logs harmlessly; after train_demo runs, demo_data gains tumor/notumor dirs which _load_background will prefer (pre-existing intended behavior from 628cd7c).
+
+#### Rollback
+- Single revert of phase-2 commit.
+
+#### Acceptance criteria
+1. 21/21 pytest (13 existing, 2 assertion lines changed as documented, 8 new); 2. manual curl matrix (txt→400, >10MB→413, empty→400, mri.JPG→200, success shape identical); 3. no `{e}` leak remains in main.py 4xx details; 4. lock guards _preprocess→response, read+503 outside; 5. train_demo.py starts cleanly with shipped demo_data, yes/no untouched; 6. checkpoint SHA, endpoints, response fields, preprocessing unchanged; frontend builds.
+
+#### Planner decision
+READY FOR IMPLEMENTATION
+
+## Implementor Record
+
+### Implementor Record — Phase 2
+
+**Session ID:** PHASE-2-IMPLEMENTOR (orchestrator-dispatched independent subagent)
+**Starting commit:** 1f72ab7
+**Ending commit:** (committed by orchestrator after APPROVED)
+**Branch:** main
+
+#### Planner record followed
+- yes; two justified minor deviations: (1) MAX_UPLOAD_MB included in the config import line (plan's own 413 message needs it); (2) lock-existence assertion uses `isinstance(x, type(threading.Lock()))` because `threading.Lock` is a factory function in CPython 3.10 and direct isinstance raises TypeError (verified empirically).
+
+#### Files changed
+- NEW backend/app/config.py; backend/app/main.py (validation chain + lock + sanitized errors + config import); backend/train_demo.py (3-line generation-gate fix); backend/tests/test_predict_validation.py (2 detail assertions only); NEW backend/tests/test_predict_upload_validation.py (8 tests).
+
+#### Functional changes
+- /predict now rejects: unsupported/missing extension (400, pre-read), oversize >MAX_UPLOAD_BYTES (413, pre- and post-read), empty body (400). Corrupt-content 400 detail sanitized ("Invalid or unreadable image file.") with logger.exception server-side. threading.Lock guards _preprocess→response (no await inside; 503 check + read outside). Success path and /health byte-identical. train_demo.py no longer crashes out-of-the-box with shipped Kaggle-layout demo_data.
+
+#### Tests added
+- 8 (unsupported ext 400, no ext 400, >10MB 413, configurable-limit 413, empty 400, valid-png 200 with exact keys + PNG magic under mocked XAI + real forward, lock existence + working predict, no-leak detail).
+
+#### Commands executed
+```text
+cd backend && ./venv/Scripts/python.exe -m pytest   (twice)
+python one-liner gate verification (no training run)
+```
+
+#### Test results
+```text
+Run 1: 21 passed in 3.28s
+Run 2: 21 passed in 3.05s
+```
+
+#### Frontend build result
+- Not rebuilt (frontend untouched).
+
+#### Migration result
+- N/A.
+
+#### Model SHA-256 after implementation
+- 5f191bc80ec9d558bccbbbf10824e1a020c1450d3a037d68a75d12b475ab7bc1 (untouched)
+
+#### Deviations from plan
+- Only the two noted above.
+
+#### Unresolved items
+- none
+
+#### Implementor status
+READY FOR REVIEW
+
+## Independent Reviewer Record
+
+### Independent Reviewer Record — Phase 2
+
+**Session ID:** PHASE-2-REVIEWER (orchestrator-dispatched independent subagent)
+**Reviewed commit:** 1f72ab7 (working tree, uncommitted phase files)
+**Expected baseline commit:** 1f72ab7
+
+#### Diff independently inspected
+- Changed set exactly {config.py(new), main.py, train_demo.py, test_predict_validation.py, test_predict_upload_validation.py(new)} + ledger; frozen set (model.py, xai.py, train_real.py, prepare_brats.py, requirements.txt, conftest.py, pytest.ini, frontend/) zero-diff.
+
+#### Architecture integrity
+- PASS — validation order verified line-by-line; extension rejection occurs before any body read; lock critical section contains zero awaits and excludes 503 check + read; HTTPException inside with-block provably releases lock (verified live); success payload compared byte-for-byte vs git show 1f72ab7.
+
+#### API compatibility
+- PASS — new error matrix correct (400 unsupported/empty/sanitized, 413 oversize, 422/503 unchanged, success path identical).
+
+#### Database/migration safety
+- N/A.
+
+#### Model integrity
+- PASS — sha256 recomputed 5f191bc8…b7bc1.
+
+#### Automated tests rerun
+```text
+Run 1: 21 passed in 2.85s
+Run 2: 21 passed in 3.74s
+```
+
+#### Frontend build rerun
+- Not rebuilt (frontend untouched).
+
+#### Manual regression performed
+- Acceptance matrix with real unmocked forward: mri.JPG (uppercase) → 200; corrupt.png → 400 sanitized detail; empty.png → 400; >10MB → 413; scan.txt → 400 unsupported; exactly-10MB boundary passes size gate (strict >). Env override MAX_UPLOAD_MB=3 verified (3145728). train_demo side effect confirmed as pre-existing intended _load_background ordering from 628cd7c, not a regression.
+
+#### Blocking findings
+- none
+
+#### Non-blocking findings
+- Framework-level multipart parsing buffers body before endpoint (platform reality; application-level claim correctly scoped); lock keeps XAI on event loop (documented planner decision, threadpool offload is future headroom); pre-read file.size check is fast-path with post-read fallback as real enforcement.
+
+#### Decision
+APPROVED
+
+#### Required next action
+- Commit phase-2; proceed to Phase 3A (Evaluation & Reliability framework).
+
+## Gate Decision
+
+**Decision:** APPROVED
+**Phase 3A may start:** YES
+**Committed as:** phase-2 commit (see Git history)
 
 ## Implementor Record
 _Not started._

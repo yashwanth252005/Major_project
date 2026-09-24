@@ -92,7 +92,8 @@ class DemoDataset(Dataset):
 
 
 def train():
-    if not os.path.isdir(DATA_DIR):
+    if not (os.path.isdir(os.path.join(DATA_DIR, "tumor"))
+            and os.path.isdir(os.path.join(DATA_DIR, "notumor"))):
         generate_dataset()
 
     dataset = DemoDataset(DATA_DIR)

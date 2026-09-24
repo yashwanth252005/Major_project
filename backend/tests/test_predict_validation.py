@@ -22,7 +22,7 @@ def test_predict_corrupt_bytes_returns_400(client):
         files={"file": ("corrupt.png", b"this is not an image")},
     )
     assert response.status_code == 400
-    assert response.json()["detail"].startswith("Could not read image")
+    assert response.json()["detail"] == "Invalid or unreadable image file."
 
 
 def test_predict_garbage_with_valid_extension_returns_400(client):
@@ -32,7 +32,7 @@ def test_predict_garbage_with_valid_extension_returns_400(client):
         files={"file": ("scan.png", garbage, "image/png")},
     )
     assert response.status_code == 400
-    assert response.json()["detail"].startswith("Could not read image")
+    assert response.json()["detail"] == "Invalid or unreadable image file."
 
 
 def test_predict_returns_503_when_model_not_loaded(client, demo_image_bytes, monkeypatch):
