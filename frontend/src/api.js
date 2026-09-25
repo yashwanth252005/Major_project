@@ -13,3 +13,7 @@ export async function fetchJson(url, opts = {}) {
 export async function fetchStats() {
   return fetchJson(`${API_BASE}/stats`);
 }
+
+export async function fetchHistory() {
+  return fetchJson(`${API_BASE}/history`);
+}

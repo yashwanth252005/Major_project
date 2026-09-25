@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { HashRouter, Routes, Route, NavLink, Navigate, useLocation } from "react-router-dom";
-import "./App.css";
+import "./styles/app.css";
 import { API_BASE, fetchJson } from "./api";
 import Home from "./pages/Home";
 import HistoryList from "./pages/HistoryList";
@@ -68,25 +68,51 @@ function ModelReadout() {
   );
 }
 
+function Wordmark() {
+  return (
+    <div className="wordmark">
+      <svg
+        className="wordmark-mark"
+        width="30"
+        height="30"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.6"
+        aria-hidden="true"
+      >
+        <circle cx="12" cy="12" r="8.6" />
+        <circle cx="12" cy="12" r="3" fill="currentColor" stroke="none" />
+        <path
+          d="M12 1.5v3.4M12 19.1v3.4M1.5 12h3.4M19.1 12h3.4"
+          strokeLinecap="round"
+        />
+      </svg>
+      <div>
+        <div className="wordmark-title">NEUROSCAN&nbsp;XAI</div>
+        <div className="wordmark-sub">
+          Unified Explainable AI Framework &mdash; Brain Tumour Detection
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function App() {
   return (
     <HashRouter>
-      <div className="console">
+      <div className="app-shell">
         <header className="topbar">
-          <div className="wordmark">
-            <span className="wordmark-icon">◈</span>
-            <div>
-              <div className="wordmark-title">NEUROSCAN&nbsp;XAI</div>
-              <div className="wordmark-sub">Unified Explainable AI Framework &mdash; Brain Tumour Detection</div>
+          <Wordmark />
+          <div className="topbar-side">
+            <div className="topbar-readouts">
+              <div className="readout">
+                <span className="readout-label">DATASET</span>
+                <span className="readout-value">BraTS 2021 &middot; FLAIR</span>
+              </div>
+              <ModelReadout />
+              <ApiReadout />
             </div>
-          </div>
-          <div className="topbar-readouts">
-            <div className="readout">
-              <span className="readout-label">DATASET</span>
-              <span className="readout-value">BraTS 2021 · FLAIR</span>
-            </div>
-            <ModelReadout />
-            <ApiReadout />
             <nav className="topbar-nav">
               <NavLink
                 to="/"

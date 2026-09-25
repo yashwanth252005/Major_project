@@ -1,6 +1,13 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, Link } from "react-router-dom";
 import { API_BASE, fetchJson } from "../api";
+import Badge from "../components/Badge";
+import Card from "../components/Card";
+import ConfidenceMeter from "../components/ConfidenceMeter";
+import EmptyState from "../components/EmptyState";
+import PageHeader from "../components/PageHeader";
+import StatCard from "../components/StatCard";
+import { summarizeRows } from "../utils/stats";
 
 const PREDICTION_LABELS = ["Tumour Detected", "No Tumour Detected"];
 
@@ -107,6 +114,8 @@ export default function HistoryList() {
     [rows, search, prediction, minConfidence, fromDate, toDate, sortMode]
   );
 
+  const summary = summarizeRows(filtered);
+
   const clearFilters = () => {
     setSearch("");
     setPrediction("");
@@ -127,10 +136,11 @@ export default function HistoryList() {
   };
 
   return (
-    <main className="history-panel">
-      <div className="panel-heading">
-        <span className="panel-index">H</span> Scan History
-      </div>
+    <main className="page history">
+      <PageHeader
+        title="Scan History"
+        subtitle="Stored scans in this deployment — application records, not diagnostic data."
+      />
 
       {error && <div className="error-box">⚠ {error}</div>}
 
@@ -139,157 +149,218 @@ export default function HistoryList() {
       )}
 
       {!error && rows !== null && rows.length === 0 && (
-        <p className="loading-line">
-          No scans yet. Run an analysis on the Analyze page and it will appear here.
-        </p>
+        <EmptyState
+          title="No scans yet"
+          hint="Run an analysis on the Analyze page and it will appear here."
+          action={<Link to="/" className="btn btn--primary">Analyze a scan</Link>}
+        />
       )}
 
       {!error && rows !== null && rows.length > 0 && (
         <>
-          <div className="history-filters">
-            <div className="filter-field filter-field-grow">
-              <label className="filter-label" htmlFor="history-filter-search">
-                Search
-              </label>
-              <input
-                id="history-filter-search"
-                type="text"
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                placeholder="Search filename, prediction or scan ID…"
-              />
-            </div>
-            <div className="filter-field">
-              <label className="filter-label" htmlFor="history-filter-class">
-                Class
-              </label>
-              <select
-                id="history-filter-class"
-                value={prediction}
-                onChange={(e) => setPrediction(e.target.value)}
-              >
-                <option value="">All classes</option>
-                {PREDICTION_LABELS.map((label) => (
-                  <option key={label} value={label}>
-                    {label}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div className="filter-field">
-              <label className="filter-label" htmlFor="history-filter-min-confidence">
-                Min confidence
-              </label>
-              <input
-                id="history-filter-min-confidence"
-                type="number"
-                min={0}
-                max={100}
-                step={1}
-                value={minConfidence}
-                onChange={(e) => setMinConfidence(e.target.value)}
-                placeholder="Any"
-              />
-            </div>
-            <div className="filter-field">
-              <label className="filter-label" htmlFor="history-filter-from">
-                From
-              </label>
-              <input
-                id="history-filter-from"
-                type="date"
-                value={fromDate}
-                onChange={(e) => setFromDate(e.target.value)}
-              />
-            </div>
-            <div className="filter-field">
-              <label className="filter-label" htmlFor="history-filter-to">
-                To
-              </label>
-              <input
-                id="history-filter-to"
-                type="date"
-                value={toDate}
-                onChange={(e) => setToDate(e.target.value)}
-              />
-            </div>
-            <div className="filter-field">
-              <label className="filter-label" htmlFor="history-filter-sort">
-                Sort
-              </label>
-              <select
-                id="history-filter-sort"
-                value={sortMode}
-                onChange={(e) => setSortMode(e.target.value)}
-              >
-                {SORT_MODES.map((m) => (
-                  <option key={m.value} value={m.value}>
-                    {m.label}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div className="filter-field">
-              <button type="button" className="filter-clear" onClick={clearFilters}>
-                Clear filters
-              </button>
-            </div>
+          <div className="stat-grid stat-grid--4" aria-label="Summary of filtered scans">
+            <StatCard
+              label="Scans in view"
+              value={`${summary.count} of ${rows.length}`}
+            />
+            <StatCard
+              label="Avg confidence"
+              value={
+                summary.avgConfidence == null
+                  ? "—"
+                  : `${summary.avgConfidence.toFixed(2)}%`
+              }
+            />
+            <StatCard
+              label="Verdict split"
+              value={`${summary.tumour} / ${summary.noTumour}`}
+              sub="tumour / no tumour"
+            />
+            <StatCard
+              label="Uncertain <70%"
+              value={String(summary.uncertain70)}
+              sub="low-certainty outputs — not errors"
+            />
           </div>
 
-          <p className="filter-count">
-            Showing {filtered.length} of {rows.length} scans
-          </p>
+          <Card>
+            <div className="filter-bar">
+              <div className="filter-field filter-field--grow">
+                <label className="filter-label" htmlFor="history-filter-search">
+                  Search
+                </label>
+                <input
+                  id="history-filter-search"
+                  type="text"
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  placeholder="Search filename, prediction or scan ID…"
+                />
+              </div>
+              <div className="filter-field">
+                <label className="filter-label" htmlFor="history-filter-class">
+                  Class
+                </label>
+                <select
+                  id="history-filter-class"
+                  value={prediction}
+                  onChange={(e) => setPrediction(e.target.value)}
+                >
+                  <option value="">All classes</option>
+                  {PREDICTION_LABELS.map((label) => (
+                    <option key={label} value={label}>
+                      {label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="filter-field">
+                <label className="filter-label" htmlFor="history-filter-min-confidence">
+                  Min confidence
+                </label>
+                <input
+                  id="history-filter-min-confidence"
+                  type="number"
+                  min={0}
+                  max={100}
+                  step={1}
+                  value={minConfidence}
+                  onChange={(e) => setMinConfidence(e.target.value)}
+                  placeholder="Any"
+                />
+              </div>
+              <div className="filter-field">
+                <label className="filter-label" htmlFor="history-filter-from">
+                  From
+                </label>
+                <input
+                  id="history-filter-from"
+                  type="date"
+                  value={fromDate}
+                  onChange={(e) => setFromDate(e.target.value)}
+                />
+              </div>
+              <div className="filter-field">
+                <label className="filter-label" htmlFor="history-filter-to">
+                  To
+                </label>
+                <input
+                  id="history-filter-to"
+                  type="date"
+                  value={toDate}
+                  onChange={(e) => setToDate(e.target.value)}
+                />
+              </div>
+              <div className="filter-field">
+                <label className="filter-label" htmlFor="history-filter-sort">
+                  Sort
+                </label>
+                <select
+                  id="history-filter-sort"
+                  value={sortMode}
+                  onChange={(e) => setSortMode(e.target.value)}
+                >
+                  {SORT_MODES.map((m) => (
+                    <option key={m.value} value={m.value}>
+                      {m.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="filter-field">
+                <button
+                  type="button"
+                  className="btn btn--ghost btn--sm"
+                  onClick={clearFilters}
+                >
+                  Clear filters
+                </button>
+              </div>
+            </div>
 
-          {filtered.length === 0 ? (
-            <p className="history-empty-filter">No scans match the selected filters.</p>
-          ) : (
-            <table className="history-table">
-              <thead>
-                <tr>
-                  <th>Date</th>
-                  <th>Filename</th>
-                  <th>Prediction</th>
-                  <th>Confidence</th>
-                  <th>Dimensions</th>
-                  <th>Size</th>
-                  <th aria-label="Actions" />
-                </tr>
-              </thead>
-              <tbody>
-                {filtered.map((r) => (
-                  <tr
-                    key={r.id}
-                    className="history-row"
-                    onClick={() => navigate(`/history/${r.id}`)}
-                  >
-                    <td>{new Date(r.created_at).toLocaleString()}</td>
-                    <td>{r.filename || "—"}</td>
-                    <td>
-                      <span className={r.prediction === "Tumour Detected" ? "pred-alert" : "pred-safe"}>
-                        {r.prediction}
-                      </span>
-                    </td>
-                    <td>{r.confidence.toFixed(1)}%</td>
-                    <td>
-                      {r.source_dimensions.width} &times; {r.source_dimensions.height}
-                    </td>
-                    <td>{formatBytes(r.size_bytes)}</td>
-                    <td>
-                      <button
-                        className="history-delete"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          deleteRow(r.id);
-                        }}
+            <p className="filter-count">
+              Showing {filtered.length} of {rows.length} scans
+            </p>
+
+            {filtered.length === 0 ? (
+              <EmptyState
+                title="No scans match the selected filters"
+                hint="Loosen the search, confidence or date filters to see more of the stored scans."
+                action={
+                  <button type="button" className="btn btn--ghost" onClick={clearFilters}>
+                    Clear filters
+                  </button>
+                }
+              />
+            ) : (
+              <div className="table-wrap">
+                <table className="history-table">
+                  <thead>
+                    <tr>
+                      <th>Date</th>
+                      <th>Filename</th>
+                      <th>Prediction</th>
+                      <th>Confidence</th>
+                      <th>Dimensions</th>
+                      <th>Size</th>
+                      <th aria-label="Actions" />
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filtered.map((r) => (
+                      <tr
+                        key={r.id}
+                        className="history-row"
+                        onClick={() => navigate(`/history/${r.id}`)}
                       >
-                        Delete
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          )}
+                        <td>{new Date(r.created_at).toLocaleString()}</td>
+                        <td>
+                          <Link
+                            className="history-filename"
+                            to={`/history/${r.id}`}
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            {r.filename || "—"}
+                          </Link>
+                        </td>
+                        <td>
+                          <Badge tone={r.prediction === "Tumour Detected" ? "alert" : "safe"}>
+                            {r.prediction}
+                          </Badge>
+                        </td>
+                        <td>
+                          <div className="cell-confidence">
+                            <span className="cell-confidence__value">
+                              {typeof r.confidence === "number" ? `${r.confidence.toFixed(1)}%` : "—"}
+                            </span>
+                            <div className="cell-confidence__meter">
+                              <ConfidenceMeter value={typeof r.confidence === "number" ? r.confidence : 0} compact />
+                            </div>
+                          </div>
+                        </td>
+                        <td>
+                          {r.source_dimensions.width} &times; {r.source_dimensions.height}
+                        </td>
+                        <td>{formatBytes(r.size_bytes)}</td>
+                        <td>
+                          <button
+                            className="btn btn--danger btn--sm"
+                            aria-label={`Delete ${r.filename || r.id}`}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              deleteRow(r.id);
+                            }}
+                          >
+                            Delete
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </Card>
         </>
       )}
     </main>

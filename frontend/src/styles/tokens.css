@@ -1,0 +1,86 @@
+/*
+ * NeuroScan-XAI design tokens — Phase 8 redesign
+ * Last updated: 2026-09-25
+ * Single source of truth for color, spacing, radius, shadow, type and focus
+ * values. Component styles live in app.css; no component ships its own CSS.
+ */
+
+:root {
+  /* -- Surfaces -- */
+  --bg: #f4f6f8;
+  --surface: #ffffff;
+  --surface-2: #eef1f4;
+
+  /* -- Dark imaging wells (MRI / XAI imagery only) -- */
+  --well: #0e1418;
+  --well-text: #8a97a3;
+
+  /* -- Borders -- */
+  --border: #dde3e8;
+  --border-strong: #c4cdd4;
+
+  /* -- Text -- */
+  --text-primary: #17222e;
+  --text-secondary: #3f4f5e;
+  --text-muted: #5f7080;
+
+  /* -- Accent (single teal) -- */
+  --accent: #0e7490;
+  --accent-strong: #155e75;
+  --accent-soft: #e0f2f7;
+  --accent-contrast: #ffffff;
+
+  /* -- Verdict tones -- */
+  --alert: #b42318;
+  --alert-soft: #fdecea;
+  --alert-border: #f2c1ba;
+  --safe: #067647;
+  --safe-soft: #e6f4ee;
+  --safe-border: #bfe3d2;
+
+  /* -- Status aliases -- */
+  --ok: #067647;
+  --bad: #b42318;
+
+  /* -- Caution (disclaimer banner) -- */
+  --caution: #8a5a00;
+  --caution-soft: #fdf6e3;
+  --caution-border: #ecd9a8;
+
+  /* -- Spacing (4-based) -- */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-7: 32px;
+  --space-8: 40px;
+
+  /* -- Radii -- */
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 14px;
+  --radius-full: 999px;
+
+  /* -- Shadows (cosmetic only; structure comes from 1px borders) -- */
+  --shadow-sm: 0 1px 2px rgba(23, 34, 46, 0.06);
+
+  /* -- Focus -- */
+  --focus-ring-color: #0e7490;
+
+  /* -- Typography -- */
+  --font-body: "IBM Plex Sans", system-ui, sans-serif;
+  --font-mono: "IBM Plex Mono", "Courier New", monospace;
+  --fs-xs: 11px;
+  --fs-sm: 12.5px;
+  --fs-md: 14px;
+  --fs-lg: 16px;
+  --fs-xl: 20px;
+  --fs-2xl: 28px;
+  --fs-3xl: 34px;
+  --w-regular: 400;
+  --w-medium: 500;
+  --w-semibold: 600;
+  --w-bold: 700;
+}

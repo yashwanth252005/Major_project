@@ -216,6 +216,7 @@ train_real.py). It is used only as SHAP background sampling at inference time.
 | 5 | COMPLETE | COMPLETE | COMPLETE | APPROVED | b13dd4c (files committed after) |
 | 6 | COMPLETE | COMPLETE | COMPLETE | APPROVED | 2a75656 (files committed after) |
 | 7 | COMPLETE | COMPLETE | COMPLETE | APPROVED WITH NON-BLOCKING NOTES | 435342f (files committed after) |
+| 8 Frontend Overhaul | COMPLETE | COMPLETE (+fix-loop) | COMPLETE | APPROVED WITH NON-BLOCKING NOTES | 769e1d3 (files committed after) |
 
 Allowed role states:
 
@@ -1679,6 +1680,137 @@ APPROVED WITH NON-BLOCKING NOTES
 
 **Decision:** APPROVED (with non-blocking notes)
 **Final sign-off allowed:** YES
+
+---
+
+# Phase 8 — Full Frontend Overhaul (post-sign-off extension, user-requested)
+
+> User request (2026-09-25): "full frontend overhaul — more informative, more KPIs, clean minimalistic and professional." Frontend-only; same Planner → Implementor → Independent Reviewer protocol; GitHub: commit + push to the open PR branch.
+
+## Planner Record
+
+### Planner Record — Phase 8
+
+**Session ID:** PHASE-8-PLANNER (orchestrator-dispatched independent subagent)
+**Date:** 2026-09-25
+**Starting commit:** 769e1d3 (branch feature/neuroscan-xai, open PR #3)
+**Branch:** feature/neuroscan-xai
+**Model SHA-256:** 5f191bc80ec9d558bccbbbf10824e1a020c1450d3a037d68a75d12b475ab7bc1 (frozen; frontend-only phase)
+
+#### Design direction (decided & justified)
+- **(b) Light professional medical-dashboard**: canvas #f4f6f8, white cards, single teal accent (#0e7490, AA on white), **dark imaging wells (#0e1418)** for all MRI/XAI imagery. Chosen over refined-dark because: "clean minimalistic professional" reads as light/informational; density carries better on light surfaces; PDF exports become white-background/print-friendly (html2canvas backgroundColor:null); brand continuity via teal accent family from the old cyan. All text tokens verified ≥4.5:1 (AA).
+- Typography: keep IBM Plex Sans/Mono (already in index.html); mono reserved for numbers/IDs/fingerprints.
+
+#### Architecture
+- NEW: styles/{tokens.css, base.css, app.css} (old App.css + index.css deleted wholesale — zero styles carried over; app.css has numbered section map + maintainer rule: no per-component CSS files).
+- 10 shared components: Card (pdf flag centralizes data-pdf-section), PageHeader, StatCard, Badge, EmptyState, DisclaimerBanner (single source of non-clinical text; banner + inline/PDF variants), ConfidenceMeter, ProbabilityGauge (SVG arc, no <text> in SVG), MiniBars, Histogram.
+- Shared hook useHistoryData {rows, loading, error, refresh} used by Home/History/Insights (per-route fetch, always fresh; Home refreshes after predict).
+- Pure aggregates in utils/stats.js: medianConfidence, binConfidence (10 bins over [50,100] — confidence domain guaranteed by max(p,1-p)*100), countsByDay(14d local), summarizeRows (count/avgConfidence/verdict split/uncertain<70%), scansToday (local).
+- exportPdf.js FROZEN (sections keep data-pdf-section via Card pdf prop; sticky summary rail deliberately excluded from export).
+
+#### Page IA (new KPIs — all honest usage/confidence statistics)
+- Home: full-width DisclaimerBanner; intake card; idle empty-state + 3-step strip; verdict card with Badge + ProbabilityGauge ("Model output probability p(tumour)") + ConfidenceMeter + model&run chips (name, fingerprint-8, processing time, scan id); recent-scans strip (last 5, text mini-cards, no thumbnails — rejected base64 waste).
+- History: 4 live KPI chips recomputed from the FILTERED set (count N of M, avg confidence, verdict split, uncertain <70%); existing 6 filters/sort/clear/delete kept; a11y fixes (filename real link, aria-label on delete, overflow-x table).
+- ScanDetail: two-column with sticky summary rail (gauge, meter, run metrics — screen-only, excluded from PDF); 3 data-pdf-section Cards preserved; anchor strip; DisclaimerBanner inline inside exported methods section.
+- Insights: 9 StatCards (total, today-local, 7d, 30d, verdict split, avg + median confidence, avg processing time, uncertain <70%) + confidence histogram + 14-day activity MiniBars + upgraded distribution bars + lowest-confidence-5 list ("low confidence is not an error verdict").
+
+#### Honesty guardrails (enforced by grep)
+- Banned anywhere in frontend/src: accuracy, sensitivity, specificity, prevalence, F1, diagnostic performance, error rate, correct/incorrect predictions. Uncertain calls labeled "low-certainty model outputs — not errors". DisclaimerBanner on Home/ScanDetail/Insights.
+
+#### Verification plan
+- build + lint; no-backend-change proof (git diff 769e1d3 excluding frontend = empty); honesty grep zero; html2canvas-safety grep (no oklch/color-mix/conic-gradient/backdrop-filter; no CSS filter in pdf sections); exactly 3 data-pdf-section in ScanDetail; orchestrator browser checklist (10 states incl. empty DB, filtered, PDF export, responsive 360–1920, keyboard pass).
+
+#### Files
+- NEW 15 (3 styles, 10 components, 1 hook, 1 util); MODIFIED 8 (main.jsx, App.jsx, 4 pages, api.js +fetchHistory, index.html theme-color); DELETED 5 (App.css, index.css, hero.png, react.svg, vite.svg — dead assets) + public/icons.svg. Frozen: exportPdf.js, xaiMethods.js, vite.config.js, package.json (NO new deps), backend/**.
+
+#### Risks
+- html2canvas vs new CSS (mitigated: borders not shadows for structure, no SVG text, no filters); timezone semantics (today = local, labeled; 7d/30d from /stats UTC — documented); histogram domain [50,100] assumption documented; Home strip failure degrades silently.
+
+#### Rollback
+- git revert of the phase-8 commit restores deleted CSS/assets; PDF pipeline untouched.
+
+#### Acceptance criteria
+1. build+lint clean, package.json diff empty; 2. same routes/flows, all existing behaviors preserved; 3. History chips live-recompute; 4. ScanDetail PDF works with disclaimer, sticky rail excluded; 5. Insights 9 cards + histogram + activity + lowest-confidence list; 6. disclaimer prominent ×3 pages; 7. greps clean; 8. visual checklist completed with screenshots.
+
+#### Planner decision
+PROCEED
+
+## Implementor Record
+
+### Implementor Record — Phase 8
+
+**Session ID:** PHASE-8-IMPLEMENTOR (orchestrator-dispatched independent subagent) + orchestrator fix-loop after review
+**Starting commit:** 769e1d3
+**Branch:** feature/neuroscan-xai
+
+#### Planner record followed
+- yes; deviations: (1) "Avg model confidence" sub-label reworded to "not a diagnostic score" — the plan's literal "not accuracy" contains a banned string; (2) lowest-confidence list also degrades on rows-fetch failure (same data dependency); (3) app.css maintenance header line-broken.
+
+#### Files
+- NEW 17 (3 styles, 10 components, 1 hook, 1 util... plus implementor fixes); MODIFIED 7 (main.jsx, App.jsx, api.js, index.html, 4 pages); DELETED 6 (App.css, index.css, 3 dead assets, icons.svg). Frozen files zero-diff.
+
+#### Functional changes
+- Full visual redesign (light professional medical-dashboard, dark imaging wells); new honest KPI surfaces (History filtered-set chips; Insights 9 cards + histogram + activity + lowest-confidence); a11y improvements; zero behavior regressions (reviewer verified filter/sort/delete/fetch logic byte-identical to baseline).
+
+#### Verification (implementor)
+- build + lint clean; no-backend-change proof empty; honesty grep 0; html2canvas-safety grep 0; 3 rendered pdf sections.
+
+#### Orchestrator live browser verification (IAB)
+- History page screenshot: light redesign, 4 KPI chips live (3 of 3, 72.95%, 0/3, uncertain 2), meters in rows, badge verdicts.
+- Insights DOM-verified: 9 cards with honest sublabels, histogram bins sum to rows (2×60-65%, 1×95-100%), 14-day activity strip, verdict bars, lowest-confidence list.
+- ScanDetail DOM-verified: toolbar, anchor strip, full metadata, 4 images, methods+disclaimer, sticky rail (gauge 0.400 with 0.5 tick, meter with 50/70 ticks).
+- Home END-TO-END in real browser: Y1.jpg injected → Run → "Tumour Detected" 99.9%, model chips (BrainTumorCNN · 5f191bc8 · 1142.5 ms), saved-to-history link, 3 XAI tiles, recent strip auto-refresh ("just now").
+- Note: avg processing time (~16 s) honest — scans ran while builds saturated the CPU.
+
+#### Fix-loop (orchestrator, from reviewer notes)
+- refresh() unmount guard (mountedRef) in useHistoryData; null-guarded confidence cell in HistoryList; 3 unused tokens removed. Build + lint re-verified clean.
+
+#### Model SHA-256
+- 5f191bc80ec9d558bccbbbf10824e1a020c1450d3a037d68a75d12b475ab7bc1 (untouched; backend zero-diff)
+
+#### Implementor status
+READY FOR REVIEW → REVIEWED → fix-loop applied → READY TO COMMIT
+
+## Independent Reviewer Record
+
+### Independent Reviewer Record — Phase 8
+
+**Session ID:** PHASE-8-REVIEWER (orchestrator-dispatched independent subagent; first dispatch died on an infrastructure error and was re-run)
+**Reviewed commit:** 769e1d3 (working tree, uncommitted phase files)
+**Expected baseline commit:** 769e1d3
+
+#### Diff independently inspected
+- Changed set exactly as claimed; frozen files (exportPdf.js, xaiMethods.js, vite.config.js, package.json, package-lock.json, backend/**, favicon.svg) zero-diff; deleted assets zero-referenced.
+
+#### Design-system / behavior / stats audits
+- All var(--) cross-checked (3 dead tokens noted → removed in fix-loop); html2canvas-safety greps zero; ProbabilityGauge arc math verified (dashoffset = πr(1−v), clamped), no SVG <text>; DisclaimerBanner single source confirmed; Card pdf → data-pdf-section, 3 pdf Cards inside reportRef, sticky rail outside.
+- Behavior preservation: Home/HistoryList/ScanDetail/Insights audited line-by-line vs baseline — filter/sort/delete/fetch logic byte-identical; null-guard on confidence display is an improvement.
+- Stats math hand-verified: median odd/even; binConfidence clamps (50→bin0, 100→bin9, bins always sum to finite-confidence rows); countsByDay 14 local days oldest→newest; summarizeRows strict <70 and 2-dp rounding; empty→0/null.
+- Honesty greps zero; a11y confirmed (aria-labels, htmlFor, focus-visible, table overflow wrapper).
+
+#### Automated verification rerun
+```text
+npm run build: ✓ 223 modules, clean
+npm run lint: 0 warnings 0 errors (22 files)
+backend pytest: 71 passed in 6.29s
+```
+
+#### Blocking findings
+- none
+
+#### Non-blocking findings
+- (fixed in fix-loop: refresh unmount guard, confidence null-guard, unused tokens) Ledger modified by orchestrator as expected by protocol.
+
+#### Decision
+APPROVED WITH NON-BLOCKING NOTES
+
+#### Required next action
+- Commit phase-8 on feature/neuroscan-xai, push to major-project (PR #3 auto-updates), monitor CI.
+
+## Gate Decision
+
+**Decision:** APPROVED (with non-blocking notes; fix-loop applied)
+**Committed as:** phase-8 commit (see Git history)
 
 ---
 
