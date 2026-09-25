@@ -62,3 +62,7 @@ frontend/dist/
 ehthumbs.db
 Thumbs.db
 Desktop.ini
+
+# Local process documents (kept on disk, never committed)
+/AGENT_EXECUTION_PROMPT.md
+/MAJOR_PROJECT_FEATURE_IMPLEMENTATION_HANDOFF.md
