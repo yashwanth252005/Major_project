@@ -215,7 +215,7 @@ train_real.py). It is used only as SHAP background sampling at inference time.
 | 4 | COMPLETE | COMPLETE (+fix-loop) | COMPLETE | APPROVED WITH NON-BLOCKING NOTES | adbc019 (files committed after) |
 | 5 | COMPLETE | COMPLETE | COMPLETE | APPROVED | b13dd4c (files committed after) |
 | 6 | COMPLETE | COMPLETE | COMPLETE | APPROVED | 2a75656 (files committed after) |
-| 7 | NOT STARTED | NOT STARTED | NOT STARTED | BLOCKED | — |
+| 7 | COMPLETE | COMPLETE | COMPLETE | APPROVED WITH NON-BLOCKING NOTES | 435342f (files committed after) |
 
 Allowed role states:
 
@@ -1562,18 +1562,123 @@ APPROVED
 # Phase 7 — Final Testing, CI & Documentation
 
 ## Planner Record
-_Not started._
+
+### Planner Record — Phase 7
+
+**Session ID:** PHASE-7-PLANNER (orchestrator-dispatched independent subagent)
+**Date:** 2026-09-25
+**Starting commit:** 435342f (phase-6 commit)
+**Branch:** main
+**Model SHA-256:** 5f191bc80ec9d558bccbbbf10824e1a020c1450d3a037d68a75d12b475ab7bc1 (re-verified)
+
+#### Scope decisions
+- CI: NEW .github/workflows/ci.yml ONLY (no templates/dependabot/coverage). Two parallel ubuntu jobs: backend (py3.10, CPU-index torch preinstall, pip cache, FULL pytest incl. slow) + frontend (node 22, npm ci, build, lint). Triggers: push main + PR + workflow_dispatch. No secrets.
+- README surgical rewrite: regenerate stale structure tree (actual tracked tree, 71 tests); add 8-endpoint API table; add Running-the-tests section; add Model Evaluation section quoting ONLY accuracy 0.6126 + balanced accuracy 0.6370 WITH the mandatory domain-shift + non-clinical caveat and pointer to docs/evaluation/EVALUATION_REPORT.md; update highlights bullets (history/explorer/report+PDF/insights/evaluation); Quick Start ordering + neuroscan.db note. Keep badges, data-assets note, Tech Stack, BraTS, Future Work, License.
+- Final verification protocol (implementor): tree clean; model sha; pytest ×2 (71); npm ci+build+lint; live endpoint loop (health→ready→model-info→predict→history→detail→delete→stats→validation errors) with temp SCAN_DB_PATH; evaluation repro into evaluation_output/repro_phase7 with timestamp-free artifacts byte-compared to docs/evaluation/ (mismatch = BLOCK).
+- NOT doing: pytest-cov, frontend test runner, new features, dependency edits.
+
+#### Files to change
+- .github/workflows/ci.yml (new), README.md (edits). Ledger finalization is orchestrator-only.
+
+#### Risks
+- httpx2 on CI (verified importable from PyPI); ubuntu torch install (CPU-index preinstall + requirements fallback); README overclaim (numbers only in Model Evaluation with caveat); eval repro mismatch (same venv as EVAL-001 — investigate, never paper over).
+
+#### Rollback
+- Single revert of phase-7 commit; no data/schema/API mutations.
+
+#### Acceptance criteria
+1. ci.yml valid, two jobs, specified triggers, no secrets; 2. README matches final tree + 8-endpoint table + tests + evaluation section with caveat, no stale claims; 3. verification protocol all green and recorded; 4. nothing outside README + ci.yml modified (ledger excepted, orchestrator).
+
+#### Planner decision
+PROCEED
 
 ## Implementor Record
-_Not started._
+
+### Implementor Record — Phase 7
+
+**Session ID:** PHASE-7-IMPLEMENTOR (orchestrator-dispatched independent subagent)
+**Starting commit:** 435342f
+**Branch:** main
+
+#### Planner record followed
+- yes; no deviations beyond YAML formatting latitude. Operational note: `npm ci` initially hit EPERM on a rolldown native binding held by four stale Vite dev-server processes from earlier live-verification sessions; they were stopped and verification ran clean.
+
+#### Files changed
+- NEW .github/workflows/ci.yml (two jobs: backend py3.10 CPU-torch + full pytest; frontend node 22 npm ci/build/lint; push-main/PR/dispatch; no secrets). README.md (surgical: highlights, regenerated structure tree, 8-endpoint API table, Running-the-tests, Model Evaluation with caveat, Quick Start notes).
+
+#### Tests added
+- None (final phase; suite validated instead: 71 passed twice).
+
+#### Commands executed
+```text
+pytest ×2 (71 passed: 4.83s / 5.45s); npm ci + build + lint (clean)
+live endpoint loop with temp SCAN_DB_PATH: 18/18 PASS
+evaluation repro → evaluation_output/repro_phase7: 7 timestamp-free artifacts byte-identical
+  to docs/evaluation/; metrics/run_metadata identical modulo timestamps; repro dir deleted
+sha256(model_weights.pt) verified
+```
+
+#### Model SHA-256 after implementation
+- 5f191bc80ec9d558bccbbbf10824e1a020c1450d3a037d68a75d12b475ab7bc1 (unchanged)
+
+#### Deviations from plan
+- none
+
+#### Implementor status
+READY FOR REVIEW
 
 ## Independent Reviewer Record
-_Not started._
+
+### Independent Reviewer Record — Phase 7
+
+**Session ID:** PHASE-7-REVIEWER (orchestrator-dispatched independent subagent)
+**Reviewed commit:** 435342f (working tree, uncommitted phase files)
+**Expected baseline commit:** 435342f
+
+#### Diff independently inspected
+- Changed set exactly {ci.yml(new), README.md} + ledger; zero diff under backend/, frontend/, docs/.
+
+#### CI workflow audit
+- Valid YAML; two jobs with correct working directories (pytest picks up backend/pytest.ini); full suite (no slow-skip); CPU-torch preinstall sensible; triggers/permissions as specified; no secrets. Latent-risk assessment: httpx2 available on PyPI (verified live), CPU torch wheels satisfy requirements, node 22 satisfies vite 8 engines, lockfile npm ci verified locally. Residual (non-blocking): unpinned pip deps; workflow activates only once pushed to GitHub.
+
+#### README audit
+- Structure tree cross-checked against git ls-files (no phantom files); API table = the 8 real routes verified against main.py; tests section (71) correct; Model Evaluation quotes ONLY accuracy 0.6126 + balanced accuracy 0.6370, cross-checked against docs/evaluation/metrics.json rounding, with mandatory domain-shift + non-clinical caveat and report pointer; no stale claims; kept sections intact.
+
+#### Automated tests rerun
+```text
+71 passed in 3.81s / 71 passed in 4.49s
+```
+
+#### Frontend build rerun
+```text
+vite build ✓ 337ms; oxlint 0 warnings 0 errors
+```
+
+#### Live smoke performed
+- 7/7 PASS: /health, /ready, /model-info (12 keys, no paths), predict→id, history row, DELETE 204, /stats total 0 (temp DB, cleaned up).
+
+#### Eval repro spot-check (reviewer's own run)
+- predictions.csv sha256 4bb0d336…95fecf and confusion_matrix.json ecb0400b…100b406f byte-identical to docs/evaluation/; other data artifacts also identical; timestamps/commit fields the only diffs. Temp output deleted.
+
+#### Model integrity
+- PASS — 5f191bc8…b7bc1.
+
+#### Blocking findings
+- none
+
+#### Non-blocking findings
+- ci.yml untracked until commit (expected); README tree omits minor files stylistically; CI hardening ideas (pip pinning, action SHAs) deferred.
+
+#### Decision
+APPROVED WITH NON-BLOCKING NOTES
+
+#### Required next action
+- Commit phase-7; finalize Final Integrity Record + Final Sign-Off (orchestrator). Pushing to the remote is the user's call (CI activates on push).
 
 ## Gate Decision
 
-**Decision:** BLOCKED  
-**Final sign-off allowed:** NO
+**Decision:** APPROVED (with non-blocking notes)
+**Final sign-off allowed:** YES
 
 ---
 
@@ -1936,39 +2041,72 @@ _None at initialization._
 
 ## Final Integrity Record
 
-Complete only after Phase 7 review.
+Completed 2026-09-25 after Phase 7 review (independently verified evidence in the Phase 7 records).
 
 ```text
-Baseline model SHA-256:
-Final model SHA-256:
-Hashes match:
+Baseline model SHA-256: 5f191bc80ec9d558bccbbbf10824e1a020c1450d3a037d68a75d12b475ab7bc1
+Final model SHA-256:    5f191bc80ec9d558bccbbbf10824e1a020c1450d3a037d68a75d12b475ab7bc1
+Hashes match: YES (verified by implementor, independent reviewer, and results reviewer)
 
 Original API endpoints preserved:
-Original response fields preserved:
-Old Scan records readable:
+  GET  /health   — unchanged (liveness, {status, model_loaded, device})
+  POST /predict  — original 7 response fields byte-identical in semantics
+                   (prediction, raw_probability, confidence, original_image,
+                   gradcam, lrp, shap); additive fields only (id, created_at,
+                   filename, content_type, size_bytes, source_dimensions,
+                   processing_time_ms, model_name, model_fingerprint); DB
+                   failure degrades to the original 7-field payload (200)
+Original response fields preserved: YES (pinned by exact-value/superset tests)
+Old Scan records readable: N/A — no history store existed at baseline (CORRECTION C-001);
+  records created by Phase 4+ read back correctly (round-trip tests)
 
-Phase 3A evaluation framework:
-Phase 3B dataset:
-Phase 3B result status:
+Phase 3A evaluation framework: COMPLETE + APPROVED (backend/evaluation/, 12 artifacts,
+  known-value metric tests with independent re-derivation)
+Phase 3B dataset: bundled Kaggle brain_tumor_dataset @ 4d0f5ed — APPROVED WITH DISCLOSURES
+  2026-09-25 (manifest sha256 ca502c2b8443b0d6d854578cf085caf02e54a2fffb9db02885abc6a17e343335)
+Phase 3B result status: EVAL-001 GENERATED, REPRODUCED, AND REVIEWED (accuracy 0.6126,
+  balanced accuracy 0.6370 — with MANDATORY domain-shift and non-clinical caveats;
+  NOT clinically meaningful; Phase 3A smoke figures superseded)
 
-Backend tests:
-Frontend build:
-Manual regression:
+Backend tests: 71 passing (run twice at final gate; suite grew 0 → 71 across phases 0–6)
+Frontend build: vite 8 build clean; oxlint 0 warnings 0 errors
+Manual regression: live endpoint loop 18/18 (health→ready→model-info→predict→history→
+  detail→delete→stats→validation errors); browser-verified UI (home/history/report/
+  explorer/insights, PDF download event); evaluation CLI reproduced byte-identically
+CI: .github/workflows/ci.yml added (backend pytest incl. slow + frontend build/lint;
+  activates on push — push is the user's decision)
 ```
 
-If Phase 3B remains pending because no approved dataset was available, final documentation must explicitly state:
-
-```text
-Evaluation framework implemented; final independent model-performance
-results remain pending an approved labeled evaluation dataset.
-```
+The Phase 3B pending-dataset statement is NOT required: an approved dataset was processed and
+independently reviewed. All numerical claims live in docs/evaluation/ and EVAL-001 with their
+caveats; the frontend carries no performance claims (grep-enforced).
 
 ---
 
 ## Final Sign-Off
 
-**Status:** NOT READY
+**Status:** SIGNED OFF — 2026-09-25
 
-The final reviewer completes this only after all mandatory phase gates are approved.
+All mandatory phase gates approved:
+- Phase 0 APPROVED WITH NON-BLOCKING NOTES (2996163)
+- Phase 1 APPROVED WITH NON-BLOCKING NOTES (1f72ab7)
+- Phase 2 APPROVED (dbf4aea)
+- Phase 3A APPROVED (58de4ed) — FRAMEWORK: APPROVED
+- Phase 3B APPROVED WITH NON-BLOCKING NOTES (adbc019) — EVAL-001 generated, reproduced, reviewed
+- Phase 4 APPROVED WITH NON-BLOCKING NOTES (b13dd4c; reviewer findings fixed in-loop)
+- Phase 5 APPROVED (2a75656)
+- Phase 6 APPROVED (435342f)
+- Phase 7 APPROVED WITH NON-BLOCKING NOTES (final commit)
 
-Phase 3B may remain `PENDING DATASET` only if no final numerical model-performance claim is made.
+Final state: the frozen compatibility contract holds (FastAPI + React/Vite + PyTorch BrainTumorCNN,
+frozen checkpoint, binary semantics, Grad-CAM/LRP/SHAP, preprocessing contract, original endpoints
+and fields preserved); all improvements are additive and independently reviewed; the checkpoint is
+byte-identical to baseline; evaluation results are traceable to a committed dataset manifest, exact
+commands, and reproducible artifacts.
+
+Known accepted limitations (documented, non-blocking): single-process deployment assumptions
+(SQLite, event-loop serialization of XAI), unpinned CI pip installs, LICENSE copyright holder
+placeholder ("NeuroScan XAI Authors"), duplicate dataset copy retained by user decision, EVAL-001
+domain-shift caveat on all performance figures.
+
+Local commits only — pushing to the origin remote (which activates CI) is left to the repository owner.

@@ -16,8 +16,9 @@
   - **Grad-CAM**: Highlights regional attention maps from the final convolutional layer.
   - **LRP (Layer-wise Relevance Propagation)**: Computes pixel-wise relevance scores to reveal exact input feature attributions.
   - **SHAP (SHapley Additive exPlanations)**: Employs `GradientExplainer` with background baseline sampling for feature contribution mapping.
-- **FastAPI Backend Services**: High-performance RESTful API serving predictions, raw confidence metrics, and base64-encoded image heatmaps.
-- **Modern Diagnostic Console**: Reactive frontend built with React 19 and Vite, offering dynamic slice uploads, real-time metrics, and synchronized multi-heatmap visual comparisons.
+- **FastAPI Backend Services**: High-performance RESTful API serving predictions, raw confidence metrics, and base64-encoded image heatmaps, plus persisted scan history (SQLite), aggregate stats, model transparency endpoints (`/model-info`, `/ready`), and sanitized error handling on every route.
+- **Modern Diagnostic Console**: React 19 + Vite single-page app (HashRouter) covering upload/analyze, a history explorer, a per-scan metadata report with multipage PDF export, and an insights dashboard built on the history statistics.
+- **Evaluation & Reliability Framework**: `backend/evaluation/` CLI producing metrics, confusion-matrix, calibration and reliability artifacts; the official evaluation run is committed under `docs/evaluation/`.
 - **BraTS 2021 & Synthetic Pipeline**: Built-in data processing tools (`prepare_brats.py` and `train_real.py`) for processing 3D `.nii.gz` volumes alongside a synthetic demo mode for instant evaluation.
 
 ---
@@ -26,25 +27,47 @@
 
 ```
 NeuroScan-XAI/
+├── .github/
+│   └── workflows/
+│       └── ci.yml              # CI: backend pytest + frontend build/lint on push/PR
 ├── backend/
 │   ├── app/
-│   │   ├── main.py          # FastAPI endpoints (/health, /predict) & middleware
-│   │   ├── model.py         # BrainTumorCNN model definition & layer mappings
-│   │   └── xai.py           # Unified Grad-CAM, LRP, and SHAP heatmaps
-│   ├── tests/               # Pytest regression suite (13 tests)
-│   ├── demo_data/           # Kaggle brain MRI slices (yes/ = tumour, no/ = normal); original copy in brain_tumor_dataset/
-│   ├── model_weights.pt     # Pre-trained CNN model weights
-│   ├── prepare_brats.py     # 3D BraTS NIfTI (.nii.gz) -> 2D PNG slice converter
-│   ├── train_demo.py        # Demo dataset generator and trainer
-│   ├── train_real.py        # Stratified training pipeline with data augmentation
-│   └── requirements.txt     # Python dependencies with minimum version bounds
-└── frontend/
-    ├── src/
-    │   ├── App.jsx          # Interactive diagnostic console component
-    │   ├── App.css          # Dark-mode medical UI design system
-    │   └── main.jsx         # Vite entry point
-    ├── index.html           # HTML template
-    └── package.json         # React & Vite dependencies
+│   │   ├── main.py             # FastAPI endpoints, middleware, model loading
+│   │   ├── model.py            # BrainTumorCNN model definition & layer mappings
+│   │   ├── xai.py              # Unified Grad-CAM, LRP, and SHAP heatmaps
+│   │   ├── config.py           # Image size, upload limits, allowed extensions
+│   │   ├── db.py               # SQLite scan-history persistence (neuroscan.db)
+│   │   ├── model_info.py       # /model-info + /ready metadata, weights fingerprint
+│   │   └── preprocessing.py    # Image decode/resize/normalize for inference
+│   ├── evaluation/             # Evaluation framework & CLI (metrics, calibration, plots)
+│   ├── tests/                  # Pytest regression suite (71 tests)
+│   ├── pytest.ini              # Pytest config (testpaths, markers)
+│   ├── requirements.txt        # Runtime Python dependencies with minimum version bounds
+│   ├── requirements-dev.txt    # Dev/test-only Python dependencies
+│   ├── demo_data/              # Kaggle brain MRI slices (yes/ = tumour, no/ = normal)
+│   ├── model_weights.pt        # Pre-trained CNN model weights
+│   ├── prepare_brats.py        # 3D BraTS NIfTI (.nii.gz) -> 2D PNG slice converter
+│   ├── train_demo.py           # Demo dataset generator and trainer
+│   └── train_real.py           # Stratified training pipeline with data augmentation
+├── docs/
+│   └── evaluation/             # Official evaluation snapshot (EVAL-001)
+├── frontend/
+│   ├── src/
+│   │   ├── App.jsx             # HashRouter SPA shell: nav, health/model readouts
+│   │   ├── api.js              # Backend API client (fetch helpers)
+│   │   ├── xaiMethods.js       # XAI method registry for the UI
+│   │   ├── exportPdf.js        # Multipage PDF report export (jsPDF + html2canvas)
+│   │   ├── pages/
+│   │   │   ├── Home.jsx        # Upload/analyze console with XAI overlays
+│   │   │   ├── HistoryList.jsx # Scan-history explorer
+│   │   │   ├── ScanDetail.jsx  # Per-scan metadata report incl. PDF export
+│   │   │   └── Insights.jsx    # Insights dashboard over history statistics
+│   │   ├── App.css             # Dark-mode medical UI design system
+│   │   ├── index.css           # Base styles
+│   │   └── main.jsx            # Vite entry point
+│   ├── index.html              # HTML template
+│   └── package.json            # React, Vite, jsPDF dependencies
+└── LICENSE                     # MIT License
 ```
 
 > **Data assets note:** `backend/demo_data/` contains the Kaggle brain MRI dataset twice — as `no/` (98 images) and `yes/` (155 images), and byte-identical copies under `brain_tumor_dataset/no/` and `brain_tumor_dataset/yes/` (the "original dataset" copy added in commit `4d0f5ed`). The duplicate (~8.9 MB) is retained intentionally; removing it is deferred to the repository owner. The backend reads only `no/` and `yes/` (or synthetic `tumor/`/`notumor/` slices that `train_demo.py` generates when `demo_data/` is absent) — the duplicate folder is never read at runtime.
@@ -60,6 +83,8 @@ NeuroScan-XAI/
 ---
 
 ## 🚀 Quick Start
+
+> **Order matters:** start the **backend first**, then the frontend — the frontend probes the API on load. The first successful `/predict` creates `neuroscan.db` (a gitignored SQLite scan-history store) in the backend working directory.
 
 ### 1. Backend Setup
 
@@ -92,6 +117,61 @@ npm run dev
 ```
 
 Open `http://localhost:5173` in your browser. Upload sample MRI slices from `backend/demo_data/yes/` or `backend/demo_data/no/` to view real-time predictions and XAI overlay heatmaps.
+
+---
+
+## 🔌 API Endpoints
+
+| Method | Path | Purpose |
+| --- | --- | --- |
+| GET | `/health` | Liveness check + model status |
+| POST | `/predict` | Analyze an MRI slice: prediction, confidence, Grad-CAM/LRP/SHAP overlays; persists to history |
+| GET | `/history` | Scan history (metadata only), newest first |
+| GET | `/history/{id}` | Full scan record incl. images |
+| DELETE | `/history/{id}` | Remove a scan record |
+| GET | `/stats` | Application-history statistics over stored scans |
+| GET | `/model-info` | Model metadata + checkpoint fingerprint (no paths, no performance claims) |
+| GET | `/ready` | Readiness probe; returns 503 when model assets are unavailable |
+
+---
+
+## 🧪 Running the tests
+
+**Backend** — 71 tests; the suite includes one `slow` real-inference end-to-end test that runs by default:
+
+```bash
+cd backend
+pip install -r requirements.txt -r requirements-dev.txt
+python -m pytest
+```
+
+**Frontend**:
+
+```bash
+cd frontend
+npm install
+npm run build
+npm run lint
+```
+
+CI runs the same backend and frontend checks on every push/PR — see `.github/workflows/ci.yml`.
+
+---
+
+## 📈 Model Evaluation
+
+The `backend/evaluation/` package ships a standalone CLI that evaluates the trained model through the exact deployed inference path (same `BrainTumorCNN` loading and preprocessing as the FastAPI app):
+
+```bash
+cd backend
+python -m evaluation.evaluate --data-dir demo_data --output-dir evaluation_output --threshold 0.5
+```
+
+It writes a full artifact set: `metrics.json`, `predictions.csv`, per-class metrics, confusion matrices, calibration data, a reliability diagram, and an auto-generated `EVALUATION_REPORT.md`.
+
+The official evaluation run (**EVAL-001**) is committed under `docs/evaluation/`.
+
+> On the bundled Kaggle evaluation set (253 images), the frozen model reaches accuracy 0.6126 and balanced accuracy 0.6370 — a domain-shifted, non-clinical dataset; these figures are NOT clinically meaningful and the model must not be used for diagnosis. Full metrics, calibration analysis and limitations: docs/evaluation/EVALUATION_REPORT.md.
 
 ---
 
