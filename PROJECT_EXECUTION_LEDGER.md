@@ -214,7 +214,7 @@ train_real.py). It is used only as SHAP background sampling at inference time.
 | 3B Evaluation Results | COMPLETE | COMPLETE (EVAL-001) | COMPLETE | APPROVED WITH NON-BLOCKING NOTES | 58de4ed (docs committed after) |
 | 4 | COMPLETE | COMPLETE (+fix-loop) | COMPLETE | APPROVED WITH NON-BLOCKING NOTES | adbc019 (files committed after) |
 | 5 | COMPLETE | COMPLETE | COMPLETE | APPROVED | b13dd4c (files committed after) |
-| 6 | NOT STARTED | NOT STARTED | NOT STARTED | BLOCKED | — |
+| 6 | COMPLETE | COMPLETE | COMPLETE | APPROVED | 2a75656 (files committed after) |
 | 7 | NOT STARTED | NOT STARTED | NOT STARTED | BLOCKED | — |
 
 Allowed role states:
@@ -1446,18 +1446,116 @@ APPROVED
 # Phase 6 — Model Info, Readiness & Transparency
 
 ## Planner Record
-_Not started._
+
+### Planner Record — Phase 6
+
+**Session ID:** PHASE-6-PLANNER (orchestrator-dispatched independent subagent)
+**Date:** 2026-09-25
+**Starting commit:** 2a75656 (phase-5 commit)
+**Branch:** main
+**Model SHA-256:** 5f191bc80ec9d558bccbbbf10824e1a020c1450d3a037d68a75d12b475ab7bc1 (re-verified; matches EVAL-001 fingerprint)
+
+#### Binding decisions
+- get_model_info(fingerprint) pure builder in model_info.py; backend owns its XAI {key,label} list (comment pointing at frontend source); NO paths, NO version strings, NO performance numbers.
+- PROVENANCE CORRECTION: training block = {intended_dataset: "BraTS 2021 FLAIR MRI slices (train_real.py)", evaluation: "See docs/evaluation/EVALUATION_REPORT.md (EVAL-001)"} — never implies the shipped checkpoint was evaluated on BraTS (EVAL-001 evaluated the bundled Kaggle dataset).
+- /ready semantics: ready iff model file present AND model_loaded (deployment-integrity probe; documented tension with /predict's model_loaded-only check is intended); SHAP background excluded; 200 body {status, model_file_present, model_loaded, device, model_fingerprint}; 503 body {status, model_file_present, model_loaded, detail:"Model assets unavailable."} (no fingerprint). /health untouched.
+- Frontend: minimal — topbar MODEL readout fetches /model-info once on mount (model_name value + fingerprint tooltip; static fallback on error). No CSS/route changes.
+
+#### Files to change
+- model_info.py (+get_model_info +_XAI_METHODS), main.py (+2 routes, docstring), NEW tests/test_model_info_readiness.py (8 tests → 71), frontend/src/App.jsx (MODEL readout). Frozen: everything else.
+
+#### Test plan
+- Exact schema test; metadata values test; fingerprint==streamed sha256 test; no-path-leakage test (no backslashes, no drive letters, no MODEL_PATH value); no-performance-claims test; /ready 200 default; 503 when model_loaded=False (exact 503 body keys); 503 AND-semantics when file missing.
+
+#### Risks
+- Provenance wording (mitigated by two-key block); ready-vs-predict tension (documented); one-time fingerprint hash cost (cached); frontend fetch failure (static fallback).
+
+#### Rollback
+- Single revert; purely additive.
+
+#### Acceptance criteria
+1. 71 tests pass, existing 63 untouched; 2. /model-info exact schema incl. fingerprint==checkpoint sha; 3. /ready 200 default / 503 monkeypatched, sanitized; 4. build+lint clean; browser: MODEL readout shows BrainTumorCNN + fingerprint tooltip; 5. no paths/version claims/performance numbers in either endpoint.
+
+#### Planner decision
+PROCEED
 
 ## Implementor Record
-_Not started._
+
+### Implementor Record — Phase 6
+
+**Session ID:** PHASE-6-IMPLEMENTOR (orchestrator-dispatched independent subagent)
+**Starting commit:** 2a75656
+**Branch:** main
+
+#### Planner record followed
+- yes; no deviations.
+
+#### Files changed
+- backend/app/model_info.py (+_XAI_METHODS +get_model_info, docstring), backend/app/main.py (+GET /model-info, +GET /ready, docstring), NEW backend/tests/test_model_info_readiness.py (8), frontend/src/App.jsx (+ModelReadout).
+
+#### Tests added
+- 8 (suite: 71 passed twice). No existing test modified.
+
+#### Commands executed
+```text
+cd backend && ./venv/Scripts/python.exe -m pytest (twice: 71 passed)
+cd frontend && npm run build && npm run lint (clean)
+live smoke: /health unchanged, /model-info 200 (fingerprint == streamed sha256), /ready 200 ready
+```
+
+#### Model SHA-256 after implementation
+- 5f191bc80ec9d558bccbbbf10824e1a020c1450d3a037d68a75d12b475ab7bc1 (unchanged)
+
+#### Implementor status
+READY FOR REVIEW
 
 ## Independent Reviewer Record
-_Not started._
+
+### Independent Reviewer Record — Phase 6
+
+**Session ID:** PHASE-6-REVIEWER (orchestrator-dispatched independent subagent)
+**Reviewed commit:** 2a75656 (working tree, uncommitted phase files)
+**Expected baseline commit:** 2a75656
+
+#### Diff independently inspected
+- Changed set exactly as claimed; frozen files zero-diff; no existing test modified.
+
+#### model-info / ready audits
+- 12-key exact schema; classes match main.py label code exactly; training block uses intended_dataset + evaluation pointer (no BraTS-evaluation claim); no paths/version claims/performance numbers (live raw-body checks incl. drive-letter regex and "%" absence). /ready: file-present AND model_loaded; 503 body without device/fingerprint; sanitized detail; frozen handlers untouched.
+
+#### Automated tests rerun
+```text
+71 passed in 5.02s / 71 passed in 5.84s
+```
+
+#### Frontend build rerun
+```text
+vite build ✓ 178ms; oxlint 0 warnings 0 errors
+```
+
+#### Live verification
+- /model-info 200 (fingerprint == reviewer's own streamed sha256); /ready 200 ready; /health unchanged. 503 path covered by monkeypatched tests.
+
+#### Model integrity
+- PASS — 5f191bc8…b7bc1 (two independent methods).
+
+#### Blocking findings
+- none
+
+#### Non-blocking findings
+- Informational: 503 body exposes condition booleans (path-free, ops-useful, intended); /ready vs /predict gate tension documented; _XAI_METHODS frontend duplication by design with pointer comment.
+
+#### Decision
+APPROVED
+
+#### Required next action
+- Commit phase-6; proceed to Phase 7.
 
 ## Gate Decision
 
-**Decision:** BLOCKED  
-**Phase 7 may start:** NO
+**Decision:** APPROVED
+**Phase 7 may start:** YES
+**Committed as:** phase-6 commit (see Git history)
 
 ---
 

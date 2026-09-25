@@ -14,6 +14,10 @@ Endpoints:
   DELETE /history/{scan_id}  -> delete one scan record
   GET  /stats                -> application-history statistics over stored
                                  scans (aggregate counts/averages, no images)
+  GET  /model-info           -> safe, machine-readable model metadata
+                                 (no paths, no secrets, no performance claims)
+  GET  /ready                -> deployment readiness: weights file present
+                                 AND model loaded into memory (503 otherwise)
 """
 
 import base64
@@ -32,7 +36,7 @@ from fastapi.responses import JSONResponse
 from . import db as app_db
 from .config import IMG_SIZE, MAX_UPLOAD_BYTES, ALLOWED_IMAGE_EXTENSIONS, MAX_UPLOAD_MB
 from .model import BrainTumorCNN
-from .model_info import model_fingerprint
+from .model_info import get_model_info, model_fingerprint
 from .preprocessing import image_dimensions, preprocess_bytes as _preprocess
 from .xai import grad_cam, lrp, shap_explanation, overlay_heatmap
 
@@ -292,3 +296,32 @@ def stats():
     except Exception:
         logger.exception("Stats storage error")
         raise HTTPException(status_code=500, detail="Stats storage error.")
+
+
+@app.get("/model-info")
+def model_info_route():
+    """Safe, machine-readable model metadata (no paths, no secrets, no performance claims)."""
+    return get_model_info(model_fingerprint(MODEL_PATH))
+
+
+@app.get("/ready")
+def ready():
+    """Deployment readiness: model weights file present AND model loaded into memory."""
+    file_present = os.path.isfile(MODEL_PATH)
+    if file_present and model_loaded:
+        return {
+            "status": "ready",
+            "model_file_present": True,
+            "model_loaded": True,
+            "device": str(device),
+            "model_fingerprint": model_fingerprint(MODEL_PATH),
+        }
+    return JSONResponse(
+        status_code=503,
+        content={
+            "status": "not_ready",
+            "model_file_present": file_present,
+            "model_loaded": bool(model_loaded),
+            "detail": "Model assets unavailable.",
+        },
+    )

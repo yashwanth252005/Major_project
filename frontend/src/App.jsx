@@ -35,6 +35,39 @@ function ApiReadout() {
   );
 }
 
+function ModelReadout() {
+  const [info, setInfo] = useState({ modelName: null, fingerprint: null });
+
+  // Fetch /model-info once on mount; on failure keep the static fallback label.
+  useEffect(() => {
+    let cancelled = false;
+    fetchJson(`${API_BASE}/model-info`)
+      .then((data) => {
+        if (cancelled) return;
+        setInfo({
+          modelName: data?.model_name ?? null,
+          fingerprint: data?.model_fingerprint ?? null,
+        });
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  return (
+    <div className="readout">
+      <span className="readout-label">MODEL</span>
+      <span
+        className="readout-value"
+        title={info.fingerprint || undefined}
+      >
+        {info.modelName || "Custom CNN"}
+      </span>
+    </div>
+  );
+}
+
 export default function App() {
   return (
     <HashRouter>
@@ -52,10 +85,7 @@ export default function App() {
               <span className="readout-label">DATASET</span>
               <span className="readout-value">BraTS 2021 · FLAIR</span>
             </div>
-            <div className="readout">
-              <span className="readout-label">MODEL</span>
-              <span className="readout-value">Custom CNN</span>
-            </div>
+            <ModelReadout />
             <ApiReadout />
             <nav className="topbar-nav">
               <NavLink
