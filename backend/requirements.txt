@@ -1,17 +1,31 @@
-# Web framework
+# ============================================================
+# WEB FRAMEWORK
+# ============================================================
+
 django>=4.2,<5.0
 djangorestframework>=3.14
 django-cors-headers>=4.3
 
-# ---- Everything below this line is what Brain_Tumor_AI/requirements.txt
-#      already needs to actually run the model. Kept here too so a single
-#      `pip install -r backend/requirements.txt` sets up the whole thing. ----
+
+# ============================================================
+# BRAIN TUMOR AI MODEL + XAI
+# ============================================================
+
 torch
 torchvision
+
 grad-cam
 shap
 captum
+
 opencv-python
 matplotlib
 pillow
 numpy
+
+
+# ============================================================
+# GOOGLE GEMINI API
+# ============================================================
+
+google-genai>=2.3.0

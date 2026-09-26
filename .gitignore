@@ -8,5 +8,8 @@ backend/db.sqlite3
 frontend/node_modules/
 frontend/dist/
 
+#history
+.history/
+
 # misc
 .env
