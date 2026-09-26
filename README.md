@@ -16,7 +16,7 @@ Dept. of CSE, 2025–2026.
 |-------------|-----------|-----------------|
 | **Yashwanth E S** | [`Brain_Tumor_AI/`](./Brain_Tumor_AI) | The CNN (DenseNet121-based) trained on BraTS 2021 FLAIR MRI scans, plus the Grad-CAM, SHAP, and Integrated Gradients explainability pipeline (`predict.py`, `utils/`). |
 | **Ankith V Hullamani** | [`backend/`](./backend) & [`frontend/`](./frontend) | Django REST API wrapping the model, scan-history persistence, and the React/Tailwind dashboard (upload → prediction → XAI visualizations → PDF report). |
-| **Aaryan Kumar** | [`frontend/`](./frontend) | React/Tailwind UI redesign, reusable frontend components, improved report interface, responsive layouts, and enhanced user experience. |
+| **Aaryan Kumar** | [`backend/`](./backend) & [`frontend/`](./frontend) | Gemini api key validation , React/Tailwind UI redesign, reusable frontend components, improved report interface, responsive layouts, and enhanced user experience. |
 | **Tejaswini K** | Research & documentation | Literature survey, comparative analysis, and project report. |
 | **Dr. Kamalakshi Naganna** | Guide | Professor & Head, Dept. of CSE — project supervision. |
 
@@ -44,50 +44,7 @@ flagged a scan before trusting it. This project addresses that by:
 > "fine-grained pixel attribution" role LRP would, but LRP itself was not implemented in
 > this phase.
 
----
 
-## Architecture
-
-```
-Major_project/
-├── Brain_Tumor_AI/        ← Yashwanth's model (untouched by backend/frontend work)
-│   ├── predict.py           BrainTumorPredictor class - the single entry point
-│   ├── config.json           class labels, thresholds, etc.
-│   ├── models/
-│   │   └── best_densenet121.pth
-│   ├── background/           reference images used to build the SHAP explainer
-│   └── utils/                 model loading, preprocessing, Grad-CAM/SHAP/IG code
-│
-├── backend/                ← Django REST API (Ankith)
-│   ├── core/                  settings, urls
-│   ├── api/
-│   │   ├── inference.py        loads Brain_Tumor_AI's predictor once, caches it
-│   │   ├── models.py            Scan (persisted prediction + XAI images)
-│   │   ├── views.py              /predict, /history endpoints
-│   │   └── serializers.py
-│   └── requirements.txt
-│
-└── frontend/                ← React + Vite + Tailwind dashboard (Ankith)
-    └── src/
-        ├── pages/               Dashboard, History, ScanDetail
-        ├── components/          UploadCard, ResultPanel, ReportImage, Navbar
-        └── api/client.js         talks to the Django API
-```
-
-**How the backend calls the model without editing it:** `Brain_Tumor_AI/predict.py`
-loads `config.json`, the `.pth` weights, and the SHAP `background/` set using paths
-relative to its own folder. `backend/api/inference.py` temporarily changes into
-`Brain_Tumor_AI/` only for that one-time model load, then serves every request after
-that from the cached instance — his code is imported as-is, never modified.
-
-**Request flow:**
-```
-Browser (React) → POST /api/predict/ (multipart image)
-                → Django view → Brain_Tumor_AI.predict.BrainTumorPredictor.predict()
-                → result saved as a Scan row (SQLite) + returned as JSON
-                → React renders prediction + Grad-CAM/SHAP/IG images
-                → optional: view full report at /history/:id → Export PDF
-```
 
 ---
 
