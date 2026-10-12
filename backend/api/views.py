@@ -9,8 +9,11 @@ from rest_framework import status
 
 from .inference import run_prediction
 from .mri_validator import validate_mri
-from .models import Scan
+from .models import ChatMessage, ChatSession, Scan
 from .serializers import ScanDetailSerializer, ScanListSerializer
+from .scan_context import build_scan_context
+from .chat_prompt import build_chat_prompt
+from .chat_service import generate_chat_answer
 
 
 # ============================================================
@@ -206,6 +209,7 @@ def predict_view(request):
                 "integrated_gradients",
                 "",
             ),
+            xai_consistency=result.get("xai_consistency", {}),
         )
 
 
@@ -336,4 +340,145 @@ def health_view(request):
         {
             "status": "ok"
         }
+    )
+
+
+# ============================================================
+# SCAN-AWARE XAI CHATBOT API
+# ============================================================
+
+@api_view(["GET", "POST", "DELETE"])
+def scan_chat_view(request, scan_id):
+    try:
+        scan = Scan.objects.get(id=scan_id)
+    except Scan.DoesNotExist:
+        return Response(
+            {"error": "Scan not found."},
+            status=status.HTTP_404_NOT_FOUND,
+        )
+
+    session = ChatSession.objects.filter(scan=scan).first()
+
+    if request.method == "GET":
+        if not session:
+            return Response(
+                {"scan_id": str(scan.id), "mode": "simple", "messages": []},
+                status=status.HTTP_200_OK,
+            )
+        return Response(
+            {
+                "scan_id": str(scan.id),
+                "mode": session.mode,
+                "messages": [
+                    {
+                        "id": message.id,
+                        "role": message.role,
+                        "content": message.content,
+                        "mode": message.mode,
+                        "sources": message.sources,
+                        "created_at": message.created_at.isoformat(),
+                    }
+                    for message in session.messages.all()
+                ],
+            },
+            status=status.HTTP_200_OK,
+        )
+
+    if request.method == "DELETE":
+        if session:
+            session.delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+    question = request.data.get("message", "")
+    if not isinstance(question, str) or not question.strip():
+        return Response(
+            {"error": "A non-empty 'message' is required."},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+
+    question = question.strip()
+    if len(question) > 4000:
+        return Response(
+            {"error": "Message is too long. Maximum length is 4000 characters."},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+
+    mode = request.data.get("mode", "simple")
+    allowed_modes = {"simple", "technical", "clinical_research"}
+    if mode not in allowed_modes:
+        return Response(
+            {"error": f"Invalid mode. Choose one of: {sorted(allowed_modes)}"},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+
+    session, _ = ChatSession.objects.get_or_create(
+        scan=scan,
+        defaults={"mode": mode},
+    )
+    if session.mode != mode:
+        session.mode = mode
+        session.save(update_fields=["mode", "updated_at"])
+
+    persisted_messages = list(
+        session.messages.order_by("-created_at", "-id")[:6]
+    )
+    persisted_messages.reverse()
+    conversation = [
+        {"role": item.role, "content": item.content}
+        for item in persisted_messages
+    ]
+
+    scan_context = build_scan_context(scan)
+    prompt = build_chat_prompt(
+        scan_context=scan_context,
+        question=question,
+        mode=mode,
+        conversation=conversation,
+    )
+
+    try:
+        answer = generate_chat_answer(prompt)
+    except Exception:
+        traceback.print_exc()
+        return Response(
+            {
+                "error": "The NeuroScan XAI Assistant is temporarily unavailable.",
+                "message": (
+                    "The scan analysis remains available. "
+                    "Please try the assistant again later."
+                ),
+            },
+            status=status.HTTP_503_SERVICE_UNAVAILABLE,
+        )
+
+    sources = ["DenseNet121"]
+    if scan.gradcam_b64:
+        sources.append("Grad-CAM")
+    if scan.integrated_gradients_b64:
+        sources.append("Integrated Gradients")
+    if scan.shap_b64:
+        sources.append("SHAP")
+
+    ChatMessage.objects.create(
+        session=session,
+        role="user",
+        content=question,
+        mode=mode,
+    )
+    ChatMessage.objects.create(
+        session=session,
+        role="assistant",
+        content=answer,
+        mode=mode,
+        sources=sources,
+    )
+
+    return Response(
+        {
+            "scan_id": str(scan.id),
+            "answer": answer,
+            "mode": mode,
+            "sources": sources,
+        },
+        status=status.HTTP_200_OK,
     )

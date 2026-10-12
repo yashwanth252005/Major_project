@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
-import html2canvas from "html2canvas";
 import jsPDF from "jspdf";
 
 import {
@@ -18,6 +17,7 @@ import {
 } from "lucide-react";
 
 import ReportImage from "../components/ReportImage.jsx";
+import ScanAssistant from "../components/ScanAssistant.jsx";
 import { deleteScan, fetchScan } from "../api/client.js";
 
 export default function ScanDetail() {
@@ -45,20 +45,9 @@ export default function ScanDetail() {
   }, [id]);
 
   async function handleExportPdf() {
-    if (!reportRef.current) return;
-
     setExporting(true);
 
     try {
-      const canvas = await html2canvas(reportRef.current, {
-        backgroundColor: "#070b0d",
-        scale: 2,
-        useCORS: true,
-        logging: false,
-      });
-
-      const imgData = canvas.toDataURL("image/png");
-
       const pdf = new jsPDF({
         orientation: "portrait",
         unit: "pt",
@@ -67,39 +56,131 @@ export default function ScanDetail() {
 
       const pageWidth = pdf.internal.pageSize.getWidth();
       const pageHeight = pdf.internal.pageSize.getHeight();
+      const margin = 42;
+      const contentWidth = pageWidth - margin * 2;
+      let y = 48;
 
-      const imgWidth = pageWidth;
-      const imgHeight = (canvas.height * imgWidth) / canvas.width;
+      const ensureSpace = (height = 30) => {
+        if (y + height > pageHeight - 48) {
+          pdf.addPage();
+          y = 48;
+        }
+      };
 
-      let heightLeft = imgHeight;
-      let position = 0;
+      const addWrappedText = (text, size = 10, gap = 15) => {
+        pdf.setFontSize(size);
+        const lines = pdf.splitTextToSize(String(text || ""), contentWidth);
+        ensureSpace(lines.length * gap + 8);
+        pdf.text(lines, margin, y);
+        y += lines.length * gap;
+      };
 
-      pdf.addImage(
-        imgData,
-        "PNG",
-        0,
-        position,
-        imgWidth,
-        imgHeight
+      const addSectionTitle = (title) => {
+        ensureSpace(32);
+        y += 8;
+        pdf.setFont("helvetica", "bold");
+        pdf.setFontSize(13);
+        pdf.text(title, margin, y);
+        y += 18;
+        pdf.setFont("helvetica", "normal");
+      };
+
+      const imageItems = [
+        ["Original MRI", scan.original_image_b64],
+        ["Grad-CAM", scan.gradcam_b64],
+        ["Integrated Gradients", scan.integrated_gradients_b64],
+        ["SHAP", scan.shap_b64],
+      ].filter(([, data]) => Boolean(data));
+
+      const addImageGrid = () => {
+        const gap = 16;
+        const cellWidth = (contentWidth - gap) / 2;
+        const maxImageHeight = 145;
+        for (let i = 0; i < imageItems.length; i += 2) {
+          const row = imageItems.slice(i, i + 2);
+          const prepared = row.map(([label, raw]) => {
+            const data = String(raw);
+            const format = data.startsWith("/9j/") || data.startsWith("data:image/jpeg") ? "JPEG" : "PNG";
+            const props = pdf.getImageProperties(data);
+            const scale = Math.min(cellWidth / props.width, maxImageHeight / props.height);
+            return { label, data, format, width: props.width * scale, height: props.height * scale };
+          });
+          const rowHeight = Math.max(...prepared.map((item) => item.height));
+          ensureSpace(rowHeight + 43);
+          prepared.forEach((item, column) => {
+            const x = margin + column * (cellWidth + gap);
+            pdf.setFont("helvetica", "bold");
+            pdf.setFontSize(10);
+            pdf.text(item.label, x, y);
+            pdf.addImage(item.data, item.format, x + (cellWidth - item.width) / 2, y + 12, item.width, item.height, undefined, "FAST");
+          });
+          y += rowHeight + 38;
+        }
+        pdf.setFont("helvetica", "normal");
+      };
+
+      pdf.setFont("helvetica", "bold");
+      pdf.setFontSize(20);
+      pdf.text("NeuroScan XAI Report", margin, y);
+      y += 18;
+
+      pdf.setFont("helvetica", "normal");
+      pdf.setFontSize(9);
+      pdf.text("Explainable Brain MRI Analysis - Research Prototype", margin, y);
+      y += 14;
+      pdf.text(`Analysis Date: ${formatDate(scan.created_at)}`, margin, y);
+      y += 13;
+      pdf.text(`Report ID: ${id}`, margin, y);
+      y += 22;
+
+      addSectionTitle("Model Analysis");
+      addWrappedText(`Prediction: ${className}`, 11, 15);
+      addWrappedText(`Softmax confidence: ${confidence.toFixed(2)}%`, 11, 15);
+      if (scan.processing_time != null) {
+        addWrappedText(`Processing time: ${scan.processing_time} seconds`, 11, 15);
+      }
+
+      if (scan.summary) {
+        addSectionTitle("Analysis Summary");
+        addWrappedText(scan.summary, 10, 14);
+      }
+
+      addSectionTitle("Explainability Analysis");
+      addWrappedText(
+        "The following images are the original MRI and the three XAI outputs generated for this scan.",
+        9,
+        13
       );
 
-      heightLeft -= pageHeight;
+      addImageGrid();
 
-      while (heightLeft > 0) {
-        position = heightLeft - imgHeight;
+      // Keep the interpretation and safety disclaimer together on one page.
+      const interpretation = "Grad-CAM shows spatial regions influencing the CNN output. Integrated Gradients provides input attribution. SHAP provides feature/input contribution evidence. These explanation methods do not provide tumor segmentation, lesion boundaries, tumor size, or a clinical diagnosis.";
+      const disclaimer = "This report is generated by a research and educational prototype. Model predictions and explainability outputs must not be interpreted as an independent clinical diagnosis or treatment recommendation.";
+      const interpretationLines = pdf.splitTextToSize(interpretation, contentWidth);
+      const disclaimerLines = pdf.splitTextToSize(disclaimer, contentWidth);
+      const closingHeight = 34 + interpretationLines.length * 13 + 36 + disclaimerLines.length * 12;
+      ensureSpace(closingHeight);
 
-        pdf.addPage();
+      addSectionTitle("Interpretation Notes");
+      addWrappedText(interpretation, 9, 13);
 
-        pdf.addImage(
-          imgData,
-          "PNG",
-          0,
-          position,
-          imgWidth,
-          imgHeight
-        );
+      y += 12;
+      pdf.setFont("helvetica", "bold");
+      pdf.setFontSize(9);
+      pdf.text("Research-use disclaimer", margin, y);
+      y += 14;
+      pdf.setFont("helvetica", "normal");
+      addWrappedText(disclaimer, 8, 12);
 
-        heightLeft -= pageHeight;
+      const totalPages = pdf.internal.getNumberOfPages();
+      for (let page = 1; page <= totalPages; page += 1) {
+        pdf.setPage(page);
+        pdf.setFont("helvetica", "normal");
+        pdf.setFontSize(8);
+        pdf.setTextColor(110, 120, 130);
+        pdf.text("NeuroScan XAI | Research prototype", margin, pageHeight - 24);
+        pdf.text(`Page ${page} of ${totalPages}`, pageWidth - margin, pageHeight - 24, { align: "right" });
       }
 
       pdf.save(`neuroscan-xai-report-${id}.pdf`);
@@ -631,6 +712,13 @@ export default function ScanDetail() {
           </div>
 
         </section>
+
+
+        {/* ================================================
+            SCAN-AWARE ASSISTANT
+        ================================================ */}
+
+        <ScanAssistant scanId={id} />
 
 
         {/* ================================================

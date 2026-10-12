@@ -28,7 +28,8 @@ class GradCAMGenerator:
         self.model.eval()
 
         grayscale_cam = self.cam(
-            input_tensor=input_tensor
+            input_tensor=input_tensor,
+            targets=None
         )[0]
 
         image = input_tensor.squeeze(0).detach().cpu()
@@ -64,4 +65,4 @@ class GradCAMGenerator:
             buffer.read()
         ).decode("utf-8")
 
-        return gradcam_base64
+        return gradcam_base64, grayscale_cam

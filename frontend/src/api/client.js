@@ -41,4 +41,28 @@ export async function deleteScan(id) {
   await client.delete(`/history/${id}/`);
 }
 
+export async function sendChatMessage(
+  scanId,
+  message,
+  mode = "simple",
+  conversation = []
+) {
+  const { data } = await client.post(`/scans/${scanId}/chat/`, {
+    message,
+    mode,
+    conversation,
+  });
+
+  return data;
+}
+
+export async function fetchChatHistory(scanId) {
+  const { data } = await client.get(`/scans/${scanId}/chat/`);
+  return data;
+}
+
+export async function clearChatHistory(scanId) {
+  await client.delete(`/scans/${scanId}/chat/`);
+}
+
 export default client;

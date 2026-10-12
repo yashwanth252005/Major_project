@@ -16,7 +16,7 @@ import re
 
 from django.conf import settings
 from google import genai
-from google.genai import types
+from google.genai import types, errors
 
 
 class MRIValidator:
@@ -115,22 +115,48 @@ Do not include ```json.
 Do not include any additional text.
 """
 
-        response = self.client.models.generate_content(
-            model=self.model,
-            contents=[
-                types.Part.from_bytes(
-                    data=image_bytes,
-                    mime_type=mime_type,
-                ),
-                prompt,
-            ],
-        )
+        try:
+            response = self.client.models.generate_content(
+                model=self.model,
+                contents=[
+                    types.Part.from_bytes(
+                        data=image_bytes,
+                        mime_type=mime_type,
+                    ),
+                    prompt,
+                ],
+            )
+        except (errors.ServerError, errors.ClientError) as exc:
+            if self._is_temporary_provider_error(exc):
+                return {
+                    "is_mri": True,
+                    "validation_bypassed": True,
+                    "message": (
+                        "External MRI validation is temporarily unavailable. "
+                        "Analysis continued in research/demo mode."
+                    ),
+                }
+            raise
 
         response_text = response.text.strip()
 
         result = self._parse_response(response_text)
 
         return result
+
+    @staticmethod
+    def _is_temporary_provider_error(exc) -> bool:
+        """Return True only for temporary capacity/rate-limit failures."""
+        status_code = getattr(exc, "status_code", None)
+        code = getattr(exc, "code", None)
+        message = str(exc).upper()
+        return (
+            status_code in {429, 503}
+            or code in {429, 503}
+            or "RESOURCE_EXHAUSTED" in message
+            or "UNAVAILABLE" in message
+            or "HIGH DEMAND" in message
+        )
 
     @staticmethod
     def _parse_response(response_text: str) -> dict:

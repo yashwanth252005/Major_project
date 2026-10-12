@@ -8,6 +8,7 @@
 # from utils.shap_explainer import SHAPGenerator
 # from utils.integrated_gradients import IntegratedGradientsGenerator
 # from utils.explanation import generate_summary
+from utils.xai_consistency import compute_xai_consistency
 
 
 # class BrainTumorPredictor:
@@ -78,7 +79,7 @@
 #         )
 
 #         # ---------- SHAP ----------
-#         shap = self.shap.generate(
+#         shap, shap_map = self.shap.generate(
 #             input_tensor=input_tensor,
 #             image_np=image_np,
 #             prediction=pred.item(),
@@ -87,7 +88,7 @@
 #         )
 
 #         # ---------- Integrated Gradients ----------
-#         integrated_gradients = self.integrated_gradients.generate(
+#         integrated_gradients, integrated_gradients_map = self.integrated_gradients.generate(
 #             input_tensor=input_tensor,
 #             image_np=image_np,
 #             prediction=pred.item(),
@@ -103,7 +104,7 @@
 #             },
 
 #             "processing_time": round(
-#                 time.time() - start,
+#                 total_seconds,
 #                 3
 #             ),
 
@@ -113,7 +114,9 @@
 
 #             "integrated_gradients": integrated_gradients,
 
-#             "summary": summary
+#             "summary": summary,
+
+#           "xai_consistency": xai_consistency
 
 #         }
 
@@ -139,6 +142,7 @@ from utils.gradcam import GradCAMGenerator
 from utils.shap_explainer import SHAPGenerator
 from utils.integrated_gradients import IntegratedGradientsGenerator
 from utils.explanation import generate_summary
+from utils.xai_consistency import compute_xai_consistency
 
 
 class BrainTumorPredictor:
@@ -177,6 +181,7 @@ class BrainTumorPredictor:
 
         start = time.time()
 
+        stage_start = time.time()
         input_tensor, image_np = preprocess_image(
             image_path,
             self.config["mean"],
@@ -185,8 +190,11 @@ class BrainTumorPredictor:
         )
 
         input_tensor = input_tensor.to(self.device)
+        preprocess_seconds = time.time() - stage_start
 
         # ---------------- Prediction ----------------
+
+        stage_start = time.time()
 
         with torch.no_grad():
 
@@ -200,6 +208,7 @@ class BrainTumorPredictor:
             )
 
         prediction = self.class_names[pred.item()]
+        prediction_seconds = time.time() - stage_start
 
         summary = generate_summary(
             prediction,
@@ -208,28 +217,51 @@ class BrainTumorPredictor:
 
         # ---------------- GradCAM ----------------
 
-        gradcam = self.gradcam.generate(
+        stage_start = time.time()
+        gradcam, gradcam_map = self.gradcam.generate(
             input_tensor
         )
+        gradcam_seconds = time.time() - stage_start
 
         # ---------------- SHAP ----------------
 
-        shap = self.shap.generate(
+        stage_start = time.time()
+        shap, shap_map = self.shap.generate(
             input_tensor=input_tensor,
             image_np=image_np,
             prediction=pred.item(),
             class_names=self.class_names,
             confidence=confidence.item()
         )
+        shap_seconds = time.time() - stage_start
 
         # -------- Integrated Gradients --------
 
-        integrated_gradients = self.integrated_gradients.generate(
+        stage_start = time.time()
+        integrated_gradients, integrated_gradients_map = self.integrated_gradients.generate(
             input_tensor=input_tensor,
             image_np=image_np,
             prediction=pred.item(),
             class_names=self.class_names,
             confidence=confidence.item()
+        )
+        integrated_gradients_seconds = time.time() - stage_start
+
+        xai_consistency = compute_xai_consistency(
+            gradcam_map,
+            integrated_gradients_map,
+            shap_map,
+        )
+
+        total_seconds = time.time() - start
+        print(
+            "[NeuroScan timing] "
+            f"preprocess={preprocess_seconds:.3f}s | "
+            f"prediction={prediction_seconds:.3f}s | "
+            f"gradcam={gradcam_seconds:.3f}s | "
+            f"shap={shap_seconds:.3f}s | "
+            f"integrated_gradients={integrated_gradients_seconds:.3f}s | "
+            f"total={total_seconds:.3f}s"
         )
 
         return {
@@ -256,7 +288,9 @@ class BrainTumorPredictor:
 
             "integrated_gradients": integrated_gradients,
 
-            "summary": summary
+            "summary": summary,
+
+            "xai_consistency": xai_consistency
 
         }
 
